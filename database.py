@@ -148,12 +148,25 @@ def get_equipments(client_name, search_query=None):
     return rows
 
 def get_equipment_by_id(eq_id):
-    """설비 ID로 단일 설비의 상세 정보를 조회합니다."""
+    """설비 ID로 단일 설비의 상세 정보를 조회합니다. 대소문자 무시 및 접두사 생략 검색을 지원합니다."""
+    if not eq_id:
+        return None
+    eq_id = str(eq_id).strip()
+    
     conn = get_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM 설비마스터 WHERE 설비ID = ?", (eq_id,))
+    
+    # 1단계: 대소문자 구분 없이 정확히 일치하는지 조회 (예: 'we-1307' -> 'WE-1307')
+    cursor.execute("SELECT * FROM 설비마스터 WHERE UPPER(설비ID) = UPPER(?)", (eq_id,))
     row = cursor.fetchone()
+    
+    # 2단계: 일치하는 항목이 없고, 숫자만 입력했거나 접두사(WE-)가 생략된 경우 (예: '1307' -> '%1307' 매칭)
+    if not row:
+        q = f"%{eq_id}"
+        cursor.execute("SELECT * FROM 설비마스터 WHERE UPPER(설비ID) LIKE ?", (q.upper(),))
+        row = cursor.fetchone()
+        
     conn.close()
     return dict(row) if row else None
 
@@ -280,6 +293,45 @@ def get_workers():
     workers = [row[0] for row in cursor.fetchall()]
     conn.close()
     return workers
+def add_client(client_name):
+    """새로운 거래처를 등록하기 위해 임시 더미 계기를 추가합니다."""
+    if not client_name:
+        return False, "거래처명이 비어있습니다."
+    client_name = client_name.strip()
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        temp_id = f"TEMP-{client_name.replace(' ', '')}"
+        cursor.execute("""
+            INSERT INTO 설비마스터 (거래처명, 설비ID, 설비명, 설치위치)
+            VALUES (?, ?, '거래처 생성용 임시계기', '미지정')
+        """, (client_name, temp_id))
+        conn.commit()
+        return True, f"새로운 거래처 '{client_name}'이(가) 등록되었습니다."
+    except sqlite3.IntegrityError:
+        return False, f"이미 존재하는 거래처('{client_name}')이거나 생성 오류가 발생했습니다."
+    except Exception as e:
+        return False, f"거래처 등록 실패: {str(e)}"
+    finally:
+        conn.close()
+
+def rename_client(old_name, new_name):
+    """거래처명을 변경합니다. 설비마스터와 점검이력의 거래처명을 일괄 업데이트합니다."""
+    if not old_name or not new_name:
+        return False, "거래처명이 비어있습니다."
+    old_name = old_name.strip()
+    new_name = new_name.strip()
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE 설비마스터 SET 거래처명 = ? WHERE 거래처명 = ?", (new_name, old_name))
+        cursor.execute("UPDATE 점검이력 SET 거래처명 = ? WHERE 거래처명 = ?", (new_name, old_name))
+        conn.commit()
+        return True, f"거래처명이 '{old_name}'에서 '{new_name}'(으)로 변경되었습니다."
+    except Exception as e:
+        return False, f"거래처명 수정 실패: {str(e)}"
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     # 스크립트 단독 실행 시 데이터베이스 초기화 테스트

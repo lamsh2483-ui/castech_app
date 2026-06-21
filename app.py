@@ -6,26 +6,7 @@ from PIL import Image
 import os
 from datetime import datetime
 import database
-
-# 상단 메뉴, Manage app 버튼 및 하단 로고까지 완벽 숨기기 코드
-st.markdown("""
-    <style>
-    /* 상단 헤더, 메뉴 및 Manage app 버튼 완벽 숨기기 */
-    header {visibility: hidden !important;}
-    #MainMenu {visibility: hidden !important;}
-    .stAppDeployButton {display: none !important;}
-    button[data-testid="stActionButton"] {display: none !important;}
-    
-    /* 하단 푸터 및 스트림릿 배지 완벽 제거 */
-    footer {visibility: hidden !important;}
-    div[data-testid="stStatusWidget"] {visibility: hidden !important;}
-    .viewerBadge_container__1QSob {display: none !important;}
-    
-    /* 오른쪽 아래 끈질긴 팝업 배지 강제 삭제 */
-    iframe[title="streamlitApp"] + div {display: none !important;}
-    div.stApp [class^="viewerBadge_"] {display: none !important;}
-    </style>
-    """, unsafe_allow_html=True)
+import urllib.parse
 
 # 1. 페이지 초기 설정 및 DB 생성
 st.set_page_config(
@@ -54,23 +35,47 @@ def inject_custom_css():
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     
+    /* Hide Streamlit top bar (deploy button and three dots menu) */
+    [data-testid="stHeader"], 
+    header[data-testid="stHeader"], 
+    .stAppDeployButton, 
+    #MainMenu, 
+    footer,
+    header {
+        display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+    }
+    div[data-testid="stAppViewContainer"] {
+        padding-top: 0px !important;
+    }
+    
     /* 헤더 스타일 */
     .main-header {
         background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
         color: white;
-        padding: 20px;
+        padding: 15px 10px;
         border-radius: 12px;
-        margin-bottom: 25px;
+        margin-bottom: 20px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         text-align: center;
         border: 1px solid #2563eb;
     }
     .main-header h1 {
         margin: 0;
-        font-size: 28px;
+        font-size: 18px !important; /* 모바일 대응 글씨 크기 축소 */
         font-weight: 800;
         letter-spacing: -0.5px;
         color: white !important;
+        white-space: nowrap; /* 줄바꿈 방지 */
+    }
+    @media (min-width: 768px) {
+        .main-header {
+            padding: 20px;
+        }
+        .main-header h1 {
+            font-size: 26px !important;
+        }
     }
     
     /* 고급스러운 디스플레이 창 / 카드 스타일 */
@@ -99,27 +104,39 @@ def inject_custom_css():
         margin-bottom: 15px;
     }
     
-    /* 모든 버튼 스타일 통일 및 호버 효과 */
-    .stButton > button {
-        width: 100%;
-        border-radius: 8px;
-        border: 1px solid #cbd5e1;
-        background-color: white;
-        color: #1e293b;
-        font-weight: 600;
-        padding: 10px 16px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    /* 모든 버튼 스타일 통일 및 호버 효과 (Streamlit data-testid 대응) */
+    div[data-testid="stButton"], 
+    div[data-testid="element-container"]:has(button[data-testid^="stBaseButton"]) {
+        width: 100% !important;
+        display: block !important;
     }
-    .stButton > button:hover {
-        border-color: #3b82f6;
-        background-color: #eff6ff;
-        color: #2563eb;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.15);
+    div[data-testid="stButton"] button, 
+    button[data-testid^="stBaseButton"] {
+        width: 100% !important;
+        border-radius: 8px !important;
+        border: 1px solid #cbd5e1 !important;
+        background-color: white !important;
+        color: #1e293b !important;
+        font-weight: 600 !important;
+        padding: 10px 16px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        text-align: center !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
     }
-    .stButton > button:active {
-        transform: translateY(1px);
+    div[data-testid="stButton"] button:hover, 
+    button[data-testid^="stBaseButton"]:hover {
+        border-color: #3b82f6 !important;
+        background-color: #eff6ff !important;
+        color: #2563eb !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.15) !important;
+    }
+    div[data-testid="stButton"] button:active, 
+    button[data-testid^="stBaseButton"]:active {
+        transform: translateY(1px) !important;
     }
     
     /* 입력 폼 및 선택창 스타일 */
@@ -189,6 +206,210 @@ def inject_custom_css():
         margin-bottom: 25px;
         box-shadow: 0 4px 10px rgba(16, 185, 129, 0.1);
     }
+    
+    /* 거래처 카드 컨테이너 */
+    .client-container {
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 16px !important;
+        align-items: stretch !important;
+        justify-content: center !important;
+        margin-top: 10px !important;
+    }
+    
+    /* 거래처 카드 스타일 (HTML A 태그 대응 - 1줄에 1개, 가로 가득 채우기, 글씨 크고 가운데 정렬) */
+    .client-card {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%) !important;
+        border: 2px solid #cbd5e1 !important;
+        border-radius: 16px !important;
+        padding: 24px 20px !important;
+        font-size: 22px !important;
+        font-weight: 700 !important;
+        color: #1e3a8a !important;
+        text-align: center !important;
+        text-decoration: none !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        cursor: pointer !important;
+    }
+    .client-card:hover {
+        border-color: #3b82f6 !important;
+        background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%) !important;
+        color: #2563eb !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.15), 0 4px 6px -2px rgba(59, 130, 246, 0.1) !important;
+    }
+    .client-card:active {
+        transform: translateY(1px) !important;
+    }
+    
+    /* Streamlit element container overrides to force full width */
+    div.element-container:has(.client-container),
+    div.element-container:has(.client-card) {
+        width: 100% !important;
+        display: block !important;
+    }
+    div.stMarkdown:has(.client-container),
+    div.stMarkdown:has(.client-card) {
+        width: 100% !important;
+        display: block !important;
+    }
+    div[data-testid="stMarkdownContainer"]:has(.client-container),
+    div[data-testid="stMarkdownContainer"]:has(.client-card) {
+        width: 100% !important;
+        display: block !important;
+    }
+    div[data-testid="stMarkdownContainer"]:has(.client-container) > p,
+    div[data-testid="stMarkdownContainer"]:has(.client-card) > p {
+        width: 100% !important;
+        display: block !important;
+        margin: 0 !important;
+    }
+    
+    /* Mobile optimization */
+    @media (max-width: 640px) {
+        .client-card {
+            font-size: 18px !important;
+            padding: 18px 12px !important;
+            border-radius: 12px !important;
+        }
+    }
+
+    /* Expander styling to match section-title */
+    div[data-testid="stExpander"] {
+        border: none !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
+        margin-bottom: 15px !important;
+    }
+    div[data-testid="stExpander"] details {
+        border: 1px solid #e2e8f0 !important;
+        border-radius: 12px !important;
+        background-color: white !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
+        overflow: hidden !important;
+    }
+    div[data-testid="stExpander"] summary {
+        background-color: #f8fafc !important;
+        padding: 12px 16px !important;
+        border-left: 4px solid #3b82f6 !important;
+        transition: all 0.2s ease !important;
+    }
+    div[data-testid="stExpander"] summary:hover {
+        background-color: #eff6ff !important;
+        color: #2563eb !important;
+    }
+    div[data-testid="stExpander"] summary span {
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        color: #1e3a8a !important;
+    }
+    div[data-testid="stExpander"] summary svg {
+        fill: #1e3a8a !important;
+    }
+
+    /* Minimize default Streamlit padding at the top */
+    .block-container,
+    div[data-testid="stMainBlockContainer"],
+    div[data-testid="stAppViewContainer"] {
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
+        margin-top: 0px !important;
+    }
+
+    /* Force horizontal layout for the top buttons block (prevents collapsing to vertical) */
+    [data-testid="stHorizontalBlock"]:has(.top-row-marker) {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        width: 100% !important;
+        gap: 12px !important;
+        justify-content: flex-start !important;
+    }
+    [data-testid="stHorizontalBlock"]:has(.top-row-marker) > div {
+        min-width: fit-content !important;
+        width: auto !important;
+        flex: 0 0 auto !important;
+    }
+
+    /* Force horizontal layout for the search row (prevents collapsing to vertical) */
+    [data-testid="column"] [data-testid="stHorizontalBlock"]:has(.search-row-marker) {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        width: 100% !important;
+        gap: 8px !important;
+        align-items: center !important;
+    }
+    [data-testid="column"] [data-testid="stHorizontalBlock"]:has(.search-row-marker) > div:nth-of-type(1) {
+        width: 75% !important;
+        min-width: 75% !important;
+        flex: 0 0 75% !important;
+    }
+    [data-testid="column"] [data-testid="stHorizontalBlock"]:has(.search-row-marker) > div:nth-of-type(2) {
+        width: 22% !important;
+        min-width: 22% !important;
+        flex: 0 0 22% !important;
+    }
+
+    /* Hide extra spacing of marker containers */
+    .element-container:has(.top-row-marker),
+    .element-container:has(.search-row-marker) {
+        position: absolute !important;
+        width: 0px !important;
+        height: 0px !important;
+        margin: 0px !important;
+        padding: 0px !important;
+        border: none !important;
+    }
+
+    /* 서브메뉴 컨테이너 및 아이템 스타일 */
+    .submenu-container {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 12px !important;
+        width: 100% !important;
+        margin-bottom: 20px !important;
+        margin-top: 10px !important;
+    }
+    .submenu-item {
+        flex: 1 !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        background-color: white !important;
+        border: 1px solid #cbd5e1 !important;
+        border-radius: 8px !important;
+        padding: 12px 16px !important;
+        font-size: 15px !important;
+        font-weight: 600 !important;
+        color: #1e293b !important;
+        text-align: center !important;
+        text-decoration: none !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        cursor: pointer !important;
+    }
+    .submenu-item:hover {
+        border-color: #3b82f6 !important;
+        background-color: #eff6ff !important;
+        color: #2563eb !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.15) !important;
+    }
+    .submenu-item.active {
+        border-color: #2563eb !important;
+        background-color: #eff6ff !important;
+        color: #2563eb !important;
+        font-weight: 700 !important;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.06) !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -201,10 +422,6 @@ if "selected_client" not in st.session_state:
     st.session_state.selected_client = None
 if "selected_eq_id" not in st.session_state:
     st.session_state.selected_eq_id = None
-if "qr_scanned_id" not in st.session_state:
-    st.session_state.qr_scanned_id = None
-if "show_camera" not in st.session_state:
-    st.session_state.show_camera = False
 if "search_filter_id" not in st.session_state:
     st.session_state.search_filter_id = None
 if "show_all" not in st.session_state:
@@ -215,261 +432,217 @@ if "edit_history_id" not in st.session_state:
     st.session_state.edit_history_id = None
 if "new_eq_form_open" not in st.session_state:
     st.session_state.new_eq_form_open = False
+if "mgmt_sub_menu" not in st.session_state:
+    st.session_state.mgmt_sub_menu = None
+if "search_query" not in st.session_state:
+    st.session_state.search_query = ""
+if "search_result_eq_id" not in st.session_state:
+    st.session_state.search_result_eq_id = None
+if "last_search_query" not in st.session_state:
+    st.session_state.last_search_query = ""
+if "search_performed" not in st.session_state:
+    st.session_state.search_performed = False
+
+# 1-1. URL 쿼리 파라미터 처리 (HTML A 태그 클릭 대응 - 로그인 복구 기능 포함)
+if "worker" in st.query_params or "client" in st.query_params or "menu" in st.query_params:
+    if "worker" in st.query_params:
+        st.session_state.authenticated = True
+        st.session_state.login_worker = st.query_params["worker"]
+    if "client" in st.query_params:
+        st.session_state.selected_client = st.query_params["client"]
+        st.session_state.selected_eq_id = None
+        st.session_state.search_filter_id = None
+        st.session_state.show_all = True
+        st.session_state.edit_mode = False
+        st.session_state.search_result_eq_id = None
+        st.session_state.search_query = ""
+        st.session_state.last_search_query = ""
+        st.session_state.search_performed = False
+    if "menu" in st.query_params:
+        st.session_state.mgmt_sub_menu = st.query_params["menu"]
+        st.session_state.new_eq_form_open = True
+    else:
+        st.session_state.mgmt_sub_menu = None
+    st.query_params.clear()
+    st.rerun()
+
+# --- 콜백 함수 정의 ---
+# (QR 기능이 제거되어 이전 함수는 삭제됨)
 
 # --- 비밀번호 로그인 체크 로직 ---
 # 사장님 설정: 초기 비밀번호를 변경하시려면 아래의 "1234" 부분을 변경하고 저장해 주세요.
 APP_PASSWORD = "1234"
 
+if "login_worker" not in st.session_state:
+    st.session_state.login_worker = None
+
 if not st.session_state.authenticated:
-    st.markdown('<div class="lux-card" style="max-width: 450px; margin: 80px auto; padding: 40px; border-radius: 16px; border: 2px solid #e2e8f0;">', unsafe_allow_html=True)
-    st.markdown('<h2 style="text-align: center; color: #1e3a8a; font-weight: 800; margin-bottom: 25px; font-size: 22px;">🔒 카스테크 현장 점검 시스템 로그인</h2>', unsafe_allow_html=True)
-    
-    with st.form("login_form"):
-        pw_input = st.text_input("현장 비밀번호를 입력해 주세요", type="password", placeholder="비밀번호 입력")
-        submit_login = st.form_submit_button("🔓 로그인")
+    # 3열 레이아웃을 사용하여 화면 중앙에 로그인 카드 배치
+    col_l1, col_l2, col_l3 = st.columns([1, 1.5, 1])
+    with col_l2:
+        st.markdown('<div style="height: 50px;"></div>', unsafe_allow_html=True) # 상단 여백
+        st.markdown('<h2 style="text-align: center; color: #1e3a8a; font-weight: 800; margin-bottom: 15px; font-size: 22px;">🔒 카스테크 현장 점검 로그인</h2>', unsafe_allow_html=True)
         
-        if submit_login:
-            if pw_input == APP_PASSWORD:
-                st.session_state.authenticated = True
-                st.success("로그인되었습니다! 화면을 준비 중입니다...")
-                st.rerun()
+        with st.container(border=True):
+            # 데이터베이스에 있는 기존 작업자 목록 조회
+            db_workers = database.get_workers()
+            worker_options = ["선택하세요"] + db_workers + ["새 작업자 직접 등록..."]
+            selected_worker = st.selectbox("작업자 선택", options=worker_options)
+            
+            final_worker = ""
+            if selected_worker == "새 작업자 직접 등록...":
+                final_worker = st.text_input("새 작업자 이름 입력", placeholder="이름을 입력하세요").strip()
             else:
-                st.error("비밀번호가 일치하지 않습니다. 다시 확인해 주세요.")
+                final_worker = selected_worker
                 
-    st.markdown('</div>', unsafe_allow_html=True)
+            pw_input = st.text_input("현장 비밀번호", type="password", placeholder="비밀번호 입력")
+            
+            if st.button("🔓 로그인"):
+                if final_worker == "선택하세요" or not final_worker:
+                    st.error("작업자를 선택하거나 새 작업자 이름을 입력해 주세요.")
+                elif pw_input != APP_PASSWORD:
+                    st.error("비밀번호가 일치하지 않습니다. 다시 확인해 주세요.")
+                else:
+                    st.session_state.authenticated = True
+                    st.session_state.login_worker = final_worker
+                    st.session_state.selected_client = None  # 로그인 시 항상 거래처 선택 화면이 첫 화면으로 나오도록 초기화
+                    st.success(f"{final_worker}님 로그인 성공!")
+                    st.rerun()
+                    
     st.stop() # 로그인이 완료되지 않았으므로 아래의 모든 코드 실행 중단 및 화면 잠금
 
-# 4. QR 코드 디코딩 함수
-def decode_qr(image_file):
-    try:
-        file_bytes = np.asarray(bytearray(image_file.read()), dtype=np.uint8)
-        img = cv2.imdecode(file_bytes, 1)
-        detector = cv2.QRCodeDetector()
-        data, bbox, straight_qrcode = detector.detectAndDecode(img)
-        if data:
-            return data
-        return None
-    except Exception as e:
-        st.error(f"QR 코드 분석 중 오류 발생: {e}")
-        return None
+# (QR 코드 디코딩 함수 삭제됨)
 
-# 5. 메인 레이아웃 타이틀
-st.markdown("""
-<div class="main-header">
-    <h1>📐 CAS-TECH 현장 점검 관리 웹</h1>
-</div>
-""", unsafe_allow_html=True)
-
-# 6. QR 스캔 영역 (최상단 배치)
-col_qr_btn, col_qr_txt = st.columns([1, 2])
-with col_qr_btn:
-    if st.button("📷 QR 스캔 카메라 토글"):
-        st.session_state.show_camera = not st.session_state.show_camera
-        st.session_state.qr_scanned_id = None
-        st.rerun()
-
-with col_qr_txt:
-    qr_manual = st.text_input("QR 코드 직접 입력 (가상 스캔)", placeholder="계기ID 입력 후 Enter (예: WE-1307)")
-    if qr_manual:
-        st.session_state.qr_scanned_id = qr_manual.strip()
-        st.session_state.show_camera = False
-
-if st.session_state.show_camera:
-    img_file = st.camera_input("카메라로 QR 코드를 비추고 촬영해 주세요.")
-    if img_file is not None:
-        scanned_id = decode_qr(img_file)
-        if scanned_id:
-            st.session_state.qr_scanned_id = scanned_id
-            st.session_state.show_camera = False
-            st.success(f"QR 코드 인식 성공: {scanned_id}")
-            st.rerun()
-        else:
-            st.warning("QR 코드를 인식하지 못했습니다. 초점을 맞춰 다시 시도해 주세요.")
-
-# 7. QR 스캔 결과 표시 (스캔된 계기 정보 최상단 조회)
-if st.session_state.qr_scanned_id:
-    eq_info = database.get_equipment_by_id(st.session_state.qr_scanned_id)
+# 5. 메인 레이아웃 렌더링
+if st.session_state.selected_client is None:
+    # ==========================================
+    # [첫화면]: 거래처 선택 및 관리만 노출
+    # ==========================================
     
-    st.markdown('<div class="qr-result-box">', unsafe_allow_html=True)
-    st.markdown('<div class="section-title">🔍 QR 스캔 결과</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="main-header">
+        <h1>📐 CAS-TECH 현장 점검 관리 웹</h1>
+        <p style="margin: 5px 0 0 0; font-size: 14px; opacity: 0.9;">작업자: st.session_state.login_worker</p>
+    </div>
+    """.replace("st.session_state.login_worker", f"👤 <b>{st.session_state.login_worker}</b>"), unsafe_allow_html=True)
     
-    if eq_info:
-        # 설비 정보 상세 테이블 표시
-        st.write(f"**거래처명:** {eq_info['거래처명']} | **설비ID:** {eq_info['설비ID']} | **설비명:** {eq_info['설비명']}")
-        
-        col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-        col_s1.write(f"**설치위치:** {eq_info['설치위치'] or '-'}")
-        col_s2.write(f"**계측기 IP:** {eq_info['계측기_IP'] or '-'}")
-        col_s3.write(f"**인디게이터:** {eq_info['인디게이터'] or '-'}")
-        col_s4.write(f"**로드셀:** {eq_info['로드셀'] or '-'}")
-        
-        # 사진 표시
-        photo1_path = eq_info['설비사진1']
-        photo2_path = eq_info['설비사진2']
-        if photo1_path and os.path.exists(photo1_path):
-            st.image(photo1_path, caption="설비사진 1", width=200)
-            
-        # 과거 이력 조회
-        st.write("---")
-        st.write("**📋 과거 점검/수리 이력**")
-        histories = database.get_histories(eq_info['설비ID'])
-        if histories:
-            hist_df = pd.DataFrame(histories)
-            hist_df = hist_df.rename(columns={
-                "날짜_시간": "점검일시",
-                "작업자명": "작업자",
-                "증상상태": "증상",
-                "조치_및_수리내용": "조치내용",
-                "금액": "비용(원)"
-            })
-            st.dataframe(hist_df[["점검일시", "작업자", "증상", "조치내용", "비용(원)"]], use_container_width=True)
-        else:
-            st.info("과거 점검 이력이 존재하지 않습니다.")
-            
-        col_act1, col_act2 = st.columns(2)
-        with col_act1:
-            if st.button("➕ 이 계기 점검 및 수리 시작"):
-                st.session_state.selected_client = eq_info['거래처명']
-                st.session_state.selected_eq_id = eq_info['설비ID']
-                st.session_state.qr_scanned_id = None
-                st.rerun()
-        with col_act2:
-            if st.button("❌ 닫기"):
-                st.session_state.qr_scanned_id = None
-                st.rerun()
+    st.markdown('<div class="section-title">🏢 거래처 선택</div>', unsafe_allow_html=True)
+    clients = database.get_clients()
+    
+    if not clients:
+        st.info("데이터베이스에 등록된 거래처가 없습니다. 먼저 엑셀 마스터를 임포트하거나 아래에서 새 거래처를 등록해 주세요.")
     else:
-        st.error(f"데이터베이스에 설비ID가 '{st.session_state.qr_scanned_id}'인 계기가 등록되어 있지 않습니다.")
-        if st.button("❌ 닫기"):
-            st.session_state.qr_scanned_id = None
-            st.rerun()
-            
-    st.markdown('</div>', unsafe_allow_html=True)
+        cards_html = '<div class="client-container">'
+        for idx, client in enumerate(clients):
+            worker_param = urllib.parse.quote(st.session_state.login_worker) if st.session_state.login_worker else ""
+            client_param = urllib.parse.quote(client)
+            href_url = f"?client={client_param}&worker={worker_param}"
+            cards_html += f'<a href="{href_url}" target="_self" class="client-card">🏢 {client}</a>'
+        cards_html += '</div>'
+        st.markdown(cards_html, unsafe_allow_html=True)
+                    
+    # 거래처 추가 및 수정 메뉴
+    st.markdown('<div style="height: 40px;"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">⚙️ 거래처 관리 (추가 및 이름 변경)</div>', unsafe_allow_html=True)
+    
+    with st.expander("🔧 거래처 추가 / 이름 수정 패널 열기", expanded=False):
+        tab1, tab2 = st.tabs(["➕ 새 거래처 등록", "✏️ 기존 거래처명 변경"])
+        
+        with tab1:
+            with st.form("add_client_form", clear_on_submit=True):
+                new_client = st.text_input("등록할 새 거래처명 입력", placeholder="예: 삼성전자 기흥공장")
+                submit_add = st.form_submit_button("💾 거래처 등록")
+                if submit_add:
+                    if not new_client:
+                        st.error("거래처명을 입력해 주세요.")
+                    else:
+                        ok, msg = database.add_client(new_client)
+                        if ok:
+                            st.success(msg)
+                            st.rerun()
+                        else:
+                            st.error(msg)
+                            
+        with tab2:
+            with st.form("rename_client_form", clear_on_submit=True):
+                if clients:
+                    client_to_rename = st.selectbox("변경할 거래처 선택", options=clients)
+                    new_name = st.text_input("새로운 거래처명 입력", placeholder="예: KCC안성1공장")
+                    submit_rename = st.form_submit_button("💾 거래처명 변경")
+                    if submit_rename:
+                        if not new_name:
+                            st.error("변경할 새로운 거래처명을 입력해 주세요.")
+                        else:
+                            ok, msg = database.rename_client(client_to_rename, new_name)
+                            if ok:
+                                st.success(msg)
+                                st.rerun()
+                            else:
+                                st.error(msg)
+                else:
+                    st.info("등록된 거래처가 없습니다.")
 
-# 8. 거래처 목록 (큰 블록/카드 그리드 형태)
-st.markdown('<div class="section-title">🏢 거래처 선택</div>', unsafe_allow_html=True)
-clients = database.get_clients()
-
-if not clients:
-    st.info("데이터베이스에 등록된 거래처가 없습니다. 먼저 엑셀 마스터를 임포트하거나 새 계기를 등록해 주세요.")
 else:
-    # 4열 그리드 레이아웃
-    cols = st.columns(4)
-    for idx, client in enumerate(clients):
-        col = cols[idx % 4]
-        with col:
-            # 거래처가 선택되어 있는 경우 보더 하이라이트
-            button_label = f"🏢 {client}"
-            if st.session_state.selected_client == client:
-                button_label = f"✅ {client}"
-            
-            # st.button을 사용하여 카드 클릭 동작 구현
-            if st.button(button_label, key=f"client_btn_{idx}"):
-                st.session_state.selected_client = client
-                st.session_state.selected_eq_id = None # 거래처 변경 시 선택 계기 초기화
+    # ==========================================
+    # [다음화면]: 특정 거래처 진입 시 (검색, 목록 등)
+    # ==========================================
+    pass
+
+# 9. 계기 관리 (거래처 진입 시 활성화)
+    col_top_btns = st.columns([1, 1.2, 5])
+    with col_top_btns[0]:
+        st.markdown('<div class="top-row-marker" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;"></div>', unsafe_allow_html=True)
+        if st.button("⬅️ 돌아가기", key="back_to_home_btn"):
+            if st.session_state.new_eq_form_open:
+                st.session_state.new_eq_form_open = False
+                st.session_state.mgmt_sub_menu = None
+            else:
+                st.session_state.selected_client = None
+                st.session_state.selected_eq_id = None
                 st.session_state.search_filter_id = None
                 st.session_state.show_all = True
                 st.session_state.edit_mode = False
-                st.rerun()
-
-# 9. 계기 관리 (거래처 진입 시 활성화)
-if st.session_state.selected_client:
-    st.write("---")
-    st.markdown(f'<div class="section-title">🛠️ {st.session_state.selected_client} 계기 관리</div>', unsafe_allow_html=True)
-    
-    # 9-1. 검색창 특수 필터 (요구사항 반영)
-    st.markdown('<div class="lux-card">', unsafe_allow_html=True)
-    st.write("**🔍 계기 실시간 검색 및 필터**")
-    
-    # 검색 입력창
-    search_query = st.text_input("계기 ID 또는 계기명을 입력하세요. (1자 이상 입력 시 하단에 매칭 목록 노출)", key="search_input")
-    
-    matched_eqs = []
-    selected_option = None
-    
-    if len(search_query) >= 1:
-        # 입력창에 1자 이상 입력했을 때 검색 목록 조회
-        matched_eqs = database.get_equipments(st.session_state.selected_client, search_query)
-        if matched_eqs:
-            # 매칭 데이터 드롭다운 노출
-            selected_option = st.selectbox(
-                "검색 결과 목록에서 대상을 선택하세요:",
-                options=matched_eqs,
-                format_func=lambda x: f"[{x['설비ID']}] {x['설비명']} (위치: {x['설치위치'] or '-'})"
-            )
-        else:
-            st.warning("일치하는 계기가 없습니다.")
+                st.session_state.search_result_eq_id = None
+                st.session_state.search_query = ""
+                st.session_state.last_search_query = ""
+                st.session_state.search_performed = False
+            st.rerun()
             
-    # 검색 버튼
-    if st.button("검색"):
-        if len(search_query) >= 1 and selected_option:
-            # 선택한 데이터만 노출
-            st.session_state.search_filter_id = selected_option["설비ID"]
-            st.session_state.show_all = False
-        else:
-            # 빈 상태이거나 검색 결과가 없을 시 전체 데이터 노출
-            st.session_state.search_filter_id = None
-            st.session_state.show_all = True
-        st.session_state.edit_mode = False
+    with col_top_btns[1]:
+        if st.button("🔧 계기등록 및 관리", key="new_eq_toggle_btn"):
+            st.session_state.new_eq_form_open = not st.session_state.new_eq_form_open
+            if not st.session_state.new_eq_form_open:
+                st.session_state.mgmt_sub_menu = None
+            st.rerun()
             
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.write("") # 작은 공백 여백
     
     # 9-2. 새 계기 등록 및 목록 레이아웃
-    col_list, col_form = st.columns([2, 1])
+    col_list, col_form = st.columns([2, 1]) if not st.session_state.new_eq_form_open else (None, None)
     
-    with col_list:
-        st.markdown('<div class="lux-card">', unsafe_allow_html=True)
-        st.write(f"**📋 계기 목록 ({st.session_state.selected_client})**")
+    if st.session_state.new_eq_form_open:
+        st.markdown('<div class="section-title">🔧 계기등록 및 관리</div>', unsafe_allow_html=True)
         
-        # 목록 필터링 적용
-        if st.session_state.show_all or not st.session_state.search_filter_id:
-            eq_list = database.get_equipments(st.session_state.selected_client)
-        else:
-            eq_list = [database.get_equipment_by_id(st.session_state.search_filter_id)]
-            # 혹시 조회 안되면 전체 가져옴
-            if not eq_list or eq_list[0] is None:
-                eq_list = database.get_equipments(st.session_state.selected_client)
-                
-        # 계기 목록 테이블 렌더링
-        if eq_list:
-            eq_df = pd.DataFrame(eq_list)
-            eq_df_display = eq_df.rename(columns={
-                "설비ID": "계기 ID",
-                "설비명": "계기명",
-                "설치위치": "설치위치",
-                "계측기_IP": "계측기 IP",
-                "인디게이터": "인디게이터",
-                "로드셀": "로드셀"
-            })
-            
-            # st.dataframe을 통해 고급 테이블 렌더링
-            st.dataframe(
-                eq_df_display[["계기 ID", "계기명", "설치위치", "계측기 IP", "인디게이터", "로드셀"]], 
-                use_container_width=True, 
-                hide_index=True
-            )
-            
-            # 빠른 점검 선택
-            st.write("**👇 아래 드롭다운에서 계기를 선택하면 상세 사양 확인 및 점검/이력 작성이 가능합니다.**")
-            selected_eq = st.selectbox(
-                "점검할 계기 선택",
-                options=eq_list,
-                format_func=lambda x: f"[{x['설비ID']}] {x['설비명']}",
-                key="select_eq_dropdown"
-            )
-            if selected_eq:
-                st.session_state.selected_eq_id = selected_eq["설비ID"]
-        else:
-            st.info("조회된 계기가 없습니다.")
-            
-        st.markdown('</div>', unsafe_allow_html=True)
+        # Render the custom sub-menu bar
+        client_param = urllib.parse.quote(st.session_state.selected_client)
+        worker_param = urllib.parse.quote(st.session_state.login_worker)
         
-        # 새 계기 등록 토글 버튼 및 입력 창
-        if st.button("➕ 새 계기 등록 토글"):
-            st.session_state.new_eq_form_open = not st.session_state.new_eq_form_open
-            
-        if st.session_state.new_eq_form_open:
-            st.markdown('<div class="lux-card">', unsafe_allow_html=True)
-            st.markdown('<div class="section-title">➕ 신규 계기 등록</div>', unsafe_allow_html=True)
+        href_new_eq = f"?client={client_param}&worker={worker_param}&menu=new_eq"
+        href_history = f"?client={client_param}&worker={worker_param}&menu=history"
+        
+        active_new_eq = "active" if st.session_state.mgmt_sub_menu == "new_eq" else ""
+        active_history = "active" if st.session_state.mgmt_sub_menu == "history" else ""
+        
+        submenu_html = f"""
+        <div class="submenu-container">
+            <a href="{href_new_eq}" target="_self" class="submenu-item {active_new_eq}">➕ 신규계기등록</a>
+            <a href="{href_history}" target="_self" class="submenu-item {active_history}">📅 기간별 수리/점검내역</a>
+        </div>
+        """
+        st.markdown(submenu_html, unsafe_allow_html=True)
+        
+        if st.session_state.mgmt_sub_menu == "new_eq":
+            st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
             with st.form("new_eq_form", clear_on_submit=True):
                 new_id = st.text_input("설비 ID (필수)", placeholder="예: WE-1308")
                 new_name = st.text_input("설비명 (필수)", placeholder="예: 입식 지게차 2000kg")
@@ -519,147 +692,238 @@ if st.session_state.selected_client:
                         if ok:
                             st.success(msg)
                             st.session_state.new_eq_form_open = False
+                            st.session_state.mgmt_sub_menu = None
                             st.rerun()
                         else:
                             st.error(msg)
-            st.markdown('</div>', unsafe_allow_html=True)
+                            
+        elif st.session_state.mgmt_sub_menu == "history":
+            st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
+            col_d1, col_d2 = st.columns(2)
+            with col_d1:
+                default_start = datetime.today().replace(day=1).date()
+                start_date = st.date_input("조회 시작일", value=default_start, key="mgmt_start_date")
+            with col_d2:
+                default_end = datetime.today().date()
+                end_date = st.date_input("조회 종료일", value=default_end, key="mgmt_end_date")
+                
+            all_histories = database.get_histories()
+            filtered_histories = []
+            for h in all_histories:
+                if h["거래처명"] != st.session_state.selected_client:
+                    continue
+                dt_str = h["날짜_시간"]
+                if not dt_str:
+                    continue
+                try:
+                    h_date_str = dt_str[:10].strip()
+                    h_date = datetime.strptime(h_date_str, "%Y-%m-%d").date()
+                    if start_date <= h_date <= end_date:
+                        filtered_histories.append(h)
+                except Exception:
+                    pass
+                    
+            if filtered_histories:
+                st.write(f"📋 **조회된 수리/점검 내역 ({len(filtered_histories)}건)**")
+                for item in filtered_histories:
+                    eq_detail = database.get_equipment_by_id(item['설비ID'])
+                    eq_name = eq_detail['설비명'] if eq_detail else "알 수 없는 설비"
+                    
+                    expander_title = f"⚙️ [{item['설비ID']}] {eq_name}  |  👤 {item['작업자명'] or '미지정'}  |  📅 {item['날짜_시간'] or '날짜 없음'}"
+                    with st.expander(expander_title, expanded=False):
+                        st.markdown(f"""
+                        **[설비 ID]** {item['설비ID']}  
+                        **[설비명]** {eq_name}  
+                        **[작업자]** {item['작업자명'] or '-'}  
+                        **[날짜]** {item['날짜_시간'] or '-'}  
+                        **[증상]** {item['증상상태'] or '-'}  
+                        **[조치 및 수리내용]** {item['조치_및_수리내용'] or '-'}
+                        """)
+                        
+                        if (item['사진1'] and os.path.exists(item['사진1'])) or (item['사진2'] and os.path.exists(item['사진2'])):
+                            col_pic1, col_pic2 = st.columns(2)
+                            if item['사진1'] and os.path.exists(item['사진1']):
+                                with col_pic1:
+                                    st.image(item['사진1'], caption="조치 사진1", use_container_width=True)
+                            if item['사진2'] and os.path.exists(item['사진2']):
+                                with col_pic2:
+                                    st.image(item['사진2'], caption="조치 사진2", use_container_width=True)
+            else:
+                st.info("📅 해당 기간 내에 등록된 수리/점검 내역이 없습니다.")
+        else:
+            st.markdown("""
+            <div style="background-color: #eff6ff; border: 1.5px solid #bfdbfe; border-radius: 12px; padding: 25px; text-align: center; margin-top: 10px;">
+                <p style="margin: 0; font-size: 16px; font-weight: 700; color: #1e3a8a;">
+                    💡 위의 메뉴에서 실행할 작업을 선택해 주세요.
+                </p>
+                <p style="margin: 8px 0 0 0; font-size: 14px; color: #3b82f6;">
+                    신규 계기를 등록하려면 <b>신규계기등록</b>을, 거래처의 기간별 수리/점검내역을 조회하려면 <b>기간별 수리/점검내역</b>을 터치하세요.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        st.stop()
+    else:
+        with col_list:
+            st.write(f"**🔍 계기 검색 및 선택 ({st.session_state.selected_client})**")
             
+            # 전체 계기 목록 가져오기
+            eq_list = database.get_equipments(st.session_state.selected_client)
+            
+            # 1. 검색 입력창 및 검색 버튼 (한 줄에 배치)
+            col_search_input, col_search_btn = st.columns([4, 1])
+            with col_search_input:
+                st.markdown('<div class="search-row-marker" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;"></div>', unsafe_allow_html=True)
+                search_input = st.text_input(
+                    "검색할 계기 ID 또는 계기명을 입력하세요",
+                    value=st.session_state.search_query,
+                    placeholder="문자나 숫자를 입력하고 검색을 누르세요 (빈칸 검색 시 전체 표시)",
+                    label_visibility="collapsed",
+                    key="eq_search_input"
+                )
+                search_query_stripped = search_input.strip()
+
+            # 사용자가 검색 입력란을 수정하면 검색 이력 초기화
+            if search_query_stripped != st.session_state.last_search_query:
+                st.session_state.last_search_query = search_query_stripped
+                st.session_state.search_query = search_query_stripped
+                
+            with col_search_btn:
+                confirm_search = st.button("🔍 검색", key="confirm_search_btn")
+            
+            if confirm_search:
+                st.session_state.search_performed = True
+                st.session_state.search_query = search_query_stripped
+                st.session_state.last_search_query = search_query_stripped
+                # 검색 버튼을 누르면 기존 상세 정보는 닫는다 (터치하여 선택하기 위함)
+                st.session_state.selected_eq_id = None
+                st.session_state.search_result_eq_id = None
+                st.rerun()
+                
+            # 2. 검색 이력에 따라 매칭되는 데이터를 나열 형태로 표시
+            if st.session_state.get("search_performed", False):
+                # 검색어가 비어 있으면 전체, 있으면 필터링
+                if len(st.session_state.search_query) >= 1:
+                    matching_eqs = [
+                        eq for eq in eq_list
+                        if st.session_state.search_query.lower() in eq["설비ID"].lower() or st.session_state.search_query.lower() in eq["설비명"].lower()
+                    ]
+                else:
+                    matching_eqs = eq_list
+                
+                if matching_eqs:
+                    st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
+                    st.write(f"📋 **검색 결과 ({len(matching_eqs)}건)**")
+                    st.write("아래에서 계기를 터치(클릭)하면 상세 정보와 등록 폼이 활성화됩니다:")
+                    
+                    for eq in matching_eqs:
+                        # 현재 선택된 계기 표시 (활성 상태일 시 🎯 아이콘 및 강조 스타일 제공)
+                        is_selected = (eq["설비ID"] == st.session_state.selected_eq_id)
+                        btn_prefix = "🎯 " if is_selected else "⚙️ "
+                        btn_label = f"{btn_prefix}[{eq['설비ID']}] {eq['설비명']} ({eq['설치위치'] or '위치 미지정'})"
+                        
+                        # 터치식 리스트 버튼 렌더링
+                        if st.button(btn_label, key=f"btn_list_select_{eq['설비ID']}", use_container_width=True):
+                            st.session_state.selected_eq_id = eq["설비ID"]
+                            st.session_state.search_result_eq_id = eq["설비ID"]
+                            st.rerun()
+                else:
+                    st.warning("⚠️ 검색어와 일치하는 계기가 없습니다. 다시 검색해 주세요.")
+        
     # 9-3. 점검 폼 및 이력 영역 (우측 컬럼)
     with col_form:
-        if st.session_state.selected_eq_id:
+        # 검색 결과가 존재하며 선택된 계기가 있을 때만 노출
+        if st.session_state.search_result_eq_id and st.session_state.selected_eq_id:
             eq_detail = database.get_equipment_by_id(st.session_state.selected_eq_id)
             
             if eq_detail:
-                st.markdown('<div class="lux-card">', unsafe_allow_html=True)
-                st.markdown(f'<div class="section-title">🔍 계기 상세 정보</div>', unsafe_allow_html=True)
-                st.write(f"**계기 ID:** {eq_detail['설비ID']}")
-                st.write(f"**계기명:** {eq_detail['설비명']}")
-                st.write(f"**설치위치:** {eq_detail['설치위치'] or '-'}")
-                st.write(f"**계측기 IP:** {eq_detail['계측기_IP'] or '-'}")
-                st.write(f"**인디게이터:** {eq_detail['인디게이터'] or '-'}")
-                st.write(f"**로드셀:** {eq_detail['로드셀'] or '-'}")
+                with st.container(border=False):
+                    st.markdown(f'<div class="section-title">🔍 계기 상세 정보</div>', unsafe_allow_html=True)
+                    st.write(f"**계기 ID:** {eq_detail['설비ID']}")
+                    st.write(f"**계기명:** {eq_detail['설비명']}")
+                    st.write(f"**설치위치:** {eq_detail['설치위치'] or '-'}")
+                    st.write(f"**계측기 IP:** {eq_detail['계측기_IP'] or '-'}")
+                    st.write(f"**인디게이터:** {eq_detail['인디게이터'] or '-'}")
+                    st.write(f"**로드셀:** {eq_detail['로드셀'] or '-'}")
+                    
+                    # 사진이 등록되어 있을 시 노출
+                    if eq_detail['설비사진1'] and os.path.exists(eq_detail['설비사진1']):
+                        st.image(eq_detail['설비사진1'], caption="설비사진 1", use_container_width=True)
+                    if eq_detail['설비사진2'] and os.path.exists(eq_detail['설비사진2']):
+                        st.image(eq_detail['설비사진2'], caption="설비사진 2", use_container_width=True)
                 
-                # 사진이 등록되어 있을 시 노출
-                if eq_detail['설비사진1'] and os.path.exists(eq_detail['설비사진1']):
-                    st.image(eq_detail['설비사진1'], caption="설비사진 1", use_container_width=True)
-                if eq_detail['설비사진2'] and os.path.exists(eq_detail['설비사진2']):
-                    st.image(eq_detail['설비사진2'], caption="설비사진 2", use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                # 점검/수리 등록 및 수정 폼
-                st.markdown('<div class="lux-card">', unsafe_allow_html=True)
-                
+                # 점검/수리 등록 폼
                 form_title = "➕ 점검 기록 등록"
                 submit_label = "💾 점검 완료 등록"
-                
-                # 수정 모드 데이터 세팅
                 pre_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                pre_worker = "선택하세요"
-                pre_symptom = ""
-                pre_action = ""
-                pre_cost = 0.0
+                pre_worker = st.session_state.get("login_worker", "선택하세요")
                 
-                if st.session_state.edit_mode and st.session_state.edit_history_id:
-                    history_data = database.get_history_by_id(st.session_state.edit_history_id)
-                    if history_data:
-                        form_title = "✏️ 점검 기록 수정"
-                        submit_label = "💾 수정 완료"
-                        pre_date = history_data["날짜_시간"]
-                        pre_worker = history_data["작업자명"] or "선택하세요"
-                        pre_symptom = history_data["증상상태"] or ""
-                        pre_action = history_data["조치_및_수리내용"] or ""
-                        pre_cost = float(history_data["금액"]) if history_data["금액"] is not None else 0.0
-                
-                st.markdown(f'<div class="section-title">{form_title}</div>', unsafe_allow_html=True)
-                
-                # 점검 이력 작성 폼 (Key를 상태값에 따라 구분해 리렌더링 유도)
-                form_key = f"inspection_form_{st.session_state.edit_mode}_{st.session_state.edit_history_id}"
-                with st.form(form_key):
-                    # 1. 등록 시간: 현재 DateTime 기본 노출 및 수정 가능 (요구사항 반영)
-                    input_date = st.text_input("점검 일시 (YYYY-MM-DD HH:MM:SS)", value=pre_date)
-                    
-                    # 2. 작업자명: selectbox 제공 (['선택하세요', 데이터베이스 내용]) + 직접 입력 지원
-                    db_workers = database.get_workers()
-                    worker_options = ["선택하세요"] + db_workers + ["직접 입력..."]
-                    
-                    # 만약 기존 데이터의 작업자가 현재 옵션에 없으면 삽입
-                    if pre_worker not in worker_options:
-                        worker_options.insert(1, pre_worker)
+                with st.expander(form_title, expanded=False):
+                    # 점검 이력 작성 폼 (Key를 고정하여 깔끔하게 처리)
+                    form_key = "new_inspection_form"
+                    with st.form(form_key):
+                        # 1. 등록 시간: 현재 DateTime 기본 노출 및 수정 가능 (요구사항 반영)
+                        input_date = st.text_input("점검 일시 (YYYY-MM-DD HH:MM:SS)", value=pre_date)
                         
-                    worker_index = worker_options.index(pre_worker) if pre_worker in worker_options else 0
-                    selected_worker = st.selectbox("작업자명 선택", options=worker_options, index=worker_index)
-                    
-                    # '직접 입력...' 선택 시 텍스트 인풋 제공
-                    custom_worker = ""
-                    if selected_worker == "직접 입력...":
-                        custom_worker = st.text_input("새 작업자 이름 입력", placeholder="작업자 성함")
+                        # 2. 작업자명: selectbox 제공 (['선택하세요', 데이터베이스 내용]) + 직접 입력 지원
+                        db_workers = database.get_workers()
+                        worker_options = ["선택하세요"] + db_workers + ["직접 입력..."]
                         
-                    input_symptom = st.text_input("증상 및 상태", value=pre_symptom)
-                    input_action = st.text_area("조치 및 수리내용", value=pre_action)
-                    input_cost = st.number_input("수리 비용(원)", value=int(pre_cost), step=1000)
-                    
-                    # 사진 첨부 (수리 전후 등)
-                    hist_photo1 = st.file_uploader("현장/조치 사진 1", type=["png", "jpg", "jpeg"], key="hp1")
-                    hist_photo2 = st.file_uploader("현장/조치 사진 2", type=["png", "jpg", "jpeg"], key="hp2")
-                    
-                    col_form_btns = st.columns([3, 1])
-                    with col_form_btns[0]:
+                        if pre_worker not in worker_options:
+                            worker_options.insert(1, pre_worker)
+                            
+                        worker_index = worker_options.index(pre_worker) if pre_worker in worker_options else 0
+                        selected_worker = st.selectbox("작업자명 선택", options=worker_options, index=worker_index)
+                        
+                        # '직접 입력...' 선택 시 텍스트 인풋 제공
+                        custom_worker = ""
+                        if selected_worker == "직접 입력...":
+                            custom_worker = st.text_input("새 작업자 이름 입력", placeholder="작업자 성함")
+                            
+                        input_symptom = st.text_input("증상 및 상태", value="")
+                        input_action = st.text_area("조치 및 수리내용", value="")
+                        input_cost = st.number_input("수리 비용(원)", value=0, step=1000)
+                        
+                        # 사진 첨부 (수리 전후 등)
+                        hist_photo1 = st.file_uploader("현장/조치 사진 1", type=["png", "jpg", "jpeg"], key="hp1")
+                        hist_photo2 = st.file_uploader("현장/조치 사진 2", type=["png", "jpg", "jpeg"], key="hp2")
+                        
                         submit_hist = st.form_submit_button(submit_label)
-                    with col_form_btns[1]:
-                        if st.session_state.edit_mode:
-                            cancel_edit = st.form_submit_button("취소")
-                            if cancel_edit:
-                                st.session_state.edit_mode = False
-                                st.session_state.edit_history_id = None
-                                st.rerun()
-                                
-                    if submit_hist:
-                        # 최종 작업자명 설정
-                        final_worker = custom_worker.strip() if selected_worker == "직접 입력..." else selected_worker
-                        
-                        if final_worker == "선택하세요" or not final_worker:
-                            st.error("작업자명을 올바르게 선택하거나 입력해 주세요.")
-                        elif not input_symptom or not input_action:
-                            st.error("증상 및 조치내용은 필수 입력 사항입니다.")
-                        else:
-                            # 사진 파일 임시 저장 처리
-                            hp1_path = history_data["사진1"] if st.session_state.edit_mode and history_data else ""
-                            hp2_path = history_data["사진2"] if st.session_state.edit_mode and history_data else ""
-                            
-                            # 새 사진 등록 시 기존 사진 대체
-                            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-                            if hist_photo1:
-                                hp1_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_1.jpg")
-                                with open(hp1_path, "wb") as f:
-                                    f.write(hist_photo1.getbuffer())
-                            if hist_photo2:
-                                hp2_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_2.jpg")
-                                with open(hp2_path, "wb") as f:
-                                    f.write(hist_photo2.getbuffer())
                                     
-                            hist_data = {
-                                "날짜_시간": input_date.strip(),
-                                "작업자명": final_worker,
-                                "거래처명": st.session_state.selected_client,
-                                "설비ID": st.session_state.selected_eq_id,
-                                "증상상태": input_symptom.strip(),
-                                "조치_및_수리내용": input_action.strip(),
-                                "사진1": hp1_path,
-                                "사진2": hp2_path,
-                                "금액": float(input_cost)
-                            }
+                        if submit_hist:
+                            # 최종 작업자명 설정
+                            final_worker = custom_worker.strip() if selected_worker == "직접 입력..." else selected_worker
                             
-                            if st.session_state.edit_mode and st.session_state.edit_history_id:
-                                # Update 작업 실행
-                                ok, msg = database.update_history(st.session_state.edit_history_id, hist_data)
-                                if ok:
-                                    st.success(msg)
-                                    st.session_state.edit_mode = False
-                                    st.session_state.edit_history_id = None
-                                    st.rerun()
-                                else:
-                                    st.error(msg)
+                            if final_worker == "선택하세요" or not final_worker:
+                                st.error("작업자명을 올바르게 선택하거나 입력해 주세요.")
+                            elif not input_symptom or not input_action:
+                                st.error("증상 및 조치내용은 필수 입력 사항입니다.")
                             else:
+                                hp1_path = ""
+                                hp2_path = ""
+                                
+                                # 새 사진 등록
+                                timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                                if hist_photo1:
+                                    hp1_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_1.jpg")
+                                    with open(hp1_path, "wb") as f:
+                                        f.write(hist_photo1.getbuffer())
+                                if hist_photo2:
+                                    hp2_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_2.jpg")
+                                    with open(hp2_path, "wb") as f:
+                                        f.write(hist_photo2.getbuffer())
+                                        
+                                hist_data = {
+                                    "날짜_시간": input_date.strip(),
+                                    "작업자명": final_worker,
+                                    "거래처명": st.session_state.selected_client,
+                                    "설비ID": st.session_state.selected_eq_id,
+                                    "증상상태": input_symptom.strip(),
+                                    "조치_및_수리내용": input_action.strip(),
+                                    "사진1": hp1_path,
+                                    "사진2": hp2_path,
+                                    "금액": float(input_cost)
+                                }
+                                
                                 # Insert 작업 실행
                                 ok, msg = database.add_history(hist_data)
                                 if ok:
@@ -667,45 +931,99 @@ if st.session_state.selected_client:
                                     st.rerun()
                                 else:
                                     st.error(msg)
-                                    
-                st.markdown('</div>', unsafe_allow_html=True)
                 
                 # 계기 과거 이력 리스트 (터치 수정 포함)
-                st.markdown('<div class="lux-card">', unsafe_allow_html=True)
-                st.markdown('<div class="section-title">📋 과거 점검/수리 이력</div>', unsafe_allow_html=True)
-                
-                eq_histories = database.get_histories(st.session_state.selected_eq_id)
-                if eq_histories:
-                    for item in eq_histories:
-                        st.markdown(f"""
-                        <div class="history-item">
-                            <div class="history-header">
-                                <span class="history-worker">👤 작업자: {item['작업자명'] or '미지정'}</span>
-                                <span>📅 {item['날짜_시간'] or '날짜 정보 없음'}</span>
-                            </div>
-                            <div class="history-body">
-                                <b>[증상]</b> {item['증상상태'] or '-'}<br>
-                                <b>[조치]</b> {item['조치_및_수리내용'] or '-'}<br>
-                                <b>[금액]</b> {f"{int(item['금액']):,}원" if item['금액'] is not None else '0원'}
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
-                        # 사진 첨부 확인 및 버튼 배치
-                        col_h1, col_h2, col_h3 = st.columns([1, 1, 1])
-                        if item['사진1'] and os.path.exists(item['사진1']):
-                            with col_h1:
-                                st.image(item['사진1'], caption="조치 사진1", width=120)
-                        if item['사진2'] and os.path.exists(item['사진2']):
-                            with col_h2:
-                                st.image(item['사진2'], caption="조치 사진2", width=120)
+                with st.container(border=False):
+                    st.markdown('<div class="section-title">📋 과거 점검/수리 이력</div>', unsafe_allow_html=True)
+                    
+                    eq_histories = database.get_histories(st.session_state.selected_eq_id)
+                    if eq_histories:
+                        for item in eq_histories:
+                            # 1. 과거 수리 내역을 expander로 만들고 금액 표시 제거
+                            expander_title = f"👤 {item['작업자명'] or '미지정'}  |  📅 {item['날짜_시간'] or '날짜 없음'}  |  [증상] {item['증상상태'] or '-'}"
+                            with st.expander(expander_title, expanded=False):
+                                st.markdown(f"""
+                                **[증상]** {item['증상상태'] or '-'}  
+                                **[조치]** {item['조치_및_수리내용'] or '-'}
+                                """)
                                 
-                        # 수정하기 버튼 (터치 시 입력 폼에 갱신)
-                        with col_h3:
-                            if st.button("✏️ 수정하기", key=f"edit_btn_{item['id']}"):
-                                st.session_state.edit_mode = True
-                                st.session_state.edit_history_id = item['id']
-                                st.rerun()
-                else:
-                    st.info("이 계기에 등록된 과거 점검 이력이 없습니다.")
-                st.markdown('</div>', unsafe_allow_html=True)
+                                # 사진 첨부 확인 및 배치
+                                if (item['사진1'] and os.path.exists(item['사진1'])) or (item['사진2'] and os.path.exists(item['사진2'])):
+                                    col_pic1, col_pic2 = st.columns(2)
+                                    if item['사진1'] and os.path.exists(item['사진1']):
+                                        with col_pic1:
+                                            st.image(item['사진1'], caption="조치 사진1", use_container_width=True)
+                                    if item['사진2'] and os.path.exists(item['사진2']):
+                                        with col_pic2:
+                                            st.image(item['사진2'], caption="조치 사진2", use_container_width=True)
+                                            
+                                # 내역 하단에 수정 가능한 입력폼 바로 제공 (수정하기 버튼 삭제)
+                                st.markdown("---")
+                                st.markdown("✏️ **이 점검 이력 수정하기**")
+                                with st.form(key=f"edit_form_{item['id']}"):
+                                    edit_date = st.text_input("점검 일시 (YYYY-MM-DD HH:MM:SS)", value=item['날짜_시간'] or "", key=f"ed_date_{item['id']}")
+                                    
+                                    db_workers = database.get_workers()
+                                    worker_options = ["선택하세요"] + db_workers + ["직접 입력..."]
+                                    pre_worker = item['작업자명'] or "선택하세요"
+                                    if pre_worker not in worker_options:
+                                        worker_options.insert(1, pre_worker)
+                                    worker_index = worker_options.index(pre_worker) if pre_worker in worker_options else 0
+                                    
+                                    edit_worker = st.selectbox("작업자명 선택", options=worker_options, index=worker_index, key=f"ed_worker_{item['id']}")
+                                    
+                                    custom_worker = ""
+                                    if edit_worker == "직접 입력...":
+                                        custom_worker = st.text_input("새 작업자 이름 입력", placeholder="작업자 성함", key=f"ed_custom_worker_{item['id']}")
+                                        
+                                    edit_symptom = st.text_input("증상 및 상태", value=item['증상상태'] or "", key=f"ed_symptom_{item['id']}")
+                                    edit_action = st.text_area("조치 및 수리내용", value=item['조치_및_수리내용'] or "", key=f"ed_action_{item['id']}")
+                                    
+                                    # 금액 및 사진 파일 수정 필드 제공
+                                    edit_cost = st.number_input("수리 비용(원)", value=int(item['금액']) if item['금액'] is not None else 0, step=1000, key=f"ed_cost_{item['id']}")
+                                    edit_photo1 = st.file_uploader("현장/조치 사진 1 수정", type=["png", "jpg", "jpeg"], key=f"ed_photo1_{item['id']}")
+                                    edit_photo2 = st.file_uploader("현장/조치 사진 2 수정", type=["png", "jpg", "jpeg"], key=f"ed_photo2_{item['id']}")
+                                    
+                                    submit_edit = st.form_submit_button("💾 수정 완료")
+                                    if submit_edit:
+                                        final_worker = custom_worker.strip() if edit_worker == "직접 입력..." else edit_worker
+                                        if final_worker == "선택하세요" or not final_worker:
+                                            st.error("작업자명을 올바르게 선택하거나 입력해 주세요.")
+                                        elif not edit_symptom or not edit_action:
+                                            st.error("증상 및 조치내용은 필수 입력 사항입니다.")
+                                        else:
+                                            hp1_path = item['사진1']
+                                            hp2_path = item['사진2']
+                                            
+                                            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+                                            if edit_photo1:
+                                                hp1_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_1.jpg")
+                                                with open(hp1_path, "wb") as f:
+                                                    f.write(edit_photo1.getbuffer())
+                                            if edit_photo2:
+                                                hp2_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_2.jpg")
+                                                with open(hp2_path, "wb") as f:
+                                                    f.write(edit_photo2.getbuffer())
+                                                    
+                                            updated_data = {
+                                                "날짜_시간": edit_date.strip(),
+                                                "작업자명": final_worker,
+                                                "거래처명": st.session_state.selected_client,
+                                                "설비ID": st.session_state.selected_eq_id,
+                                                "증상상태": edit_symptom.strip(),
+                                                "조치_및_수리내용": edit_action.strip(),
+                                                "사진1": hp1_path,
+                                                "사진2": hp2_path,
+                                                "금액": float(edit_cost)
+                                            }
+                                            
+                                            ok, msg = database.update_history(item['id'], updated_data)
+                                            if ok:
+                                                st.success(msg)
+                                                st.rerun()
+                                            else:
+                                                st.error(msg)
+                    else:
+                        st.info("이 계기에 등록된 과거 점검 이력이 없습니다.")
+        else:
+            st.info("💡 왼쪽 검색창에 계기 ID 또는 명칭의 일부를 입력하고 🔍 검색을 완료하시면 상세 정보와 점검 등록 양식이 나타납니다.")
