@@ -175,6 +175,8 @@ def inject_custom_css():
 inject_custom_css()
 
 # 3. 세션 상태 초기화
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 if "selected_client" not in st.session_state:
     st.session_state.selected_client = None
 if "selected_eq_id" not in st.session_state:
@@ -193,6 +195,29 @@ if "edit_history_id" not in st.session_state:
     st.session_state.edit_history_id = None
 if "new_eq_form_open" not in st.session_state:
     st.session_state.new_eq_form_open = False
+
+# --- 비밀번호 로그인 체크 로직 ---
+# 사장님 설정: 초기 비밀번호를 변경하시려면 아래의 "1234" 부분을 변경하고 저장해 주세요.
+APP_PASSWORD = "1234"
+
+if not st.session_state.authenticated:
+    st.markdown('<div class="lux-card" style="max-width: 450px; margin: 80px auto; padding: 40px; border-radius: 16px; border: 2px solid #e2e8f0;">', unsafe_allow_html=True)
+    st.markdown('<h2 style="text-align: center; color: #1e3a8a; font-weight: 800; margin-bottom: 25px; font-size: 22px;">🔒 카스테크 현장 점검 시스템 로그인</h2>', unsafe_allow_html=True)
+    
+    with st.form("login_form"):
+        pw_input = st.text_input("현장 비밀번호를 입력해 주세요", type="password", placeholder="비밀번호 입력")
+        submit_login = st.form_submit_button("🔓 로그인")
+        
+        if submit_login:
+            if pw_input == APP_PASSWORD:
+                st.session_state.authenticated = True
+                st.success("로그인되었습니다! 화면을 준비 중입니다...")
+                st.rerun()
+            else:
+                st.error("비밀번호가 일치하지 않습니다. 다시 확인해 주세요.")
+                
+    st.markdown('</div>', unsafe_allow_html=True)
+    st.stop() # 로그인이 완료되지 않았으므로 아래의 모든 코드 실행 중단 및 화면 잠금
 
 # 4. QR 코드 디코딩 함수
 def decode_qr(image_file):
