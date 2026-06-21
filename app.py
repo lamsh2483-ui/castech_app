@@ -7,24 +7,26 @@ import os
 from datetime import datetime
 import database
 
-# 상단 메뉴 및 하단 모든 스트림릿 로고/배지 완벽 숨기기 코드
+# 상단 메뉴, Manage app 버튼 및 하단 로고까지 완벽 숨기기 코드
 st.markdown("""
     <style>
-    /* 상단 헤더 및 메뉴 숨기기 */
+    /* 상단 헤더, 메뉴 및 Manage app 버튼 완벽 숨기기 */
     header {visibility: hidden !important;}
     #MainMenu {visibility: hidden !important;}
+    .stAppDeployButton {display: none !important;}
+    button[data-testid="stActionButton"] {display: none !important;}
     
     /* 하단 푸터 및 스트림릿 배지 완벽 제거 */
     footer {visibility: hidden !important;}
     div[data-testid="stStatusWidget"] {visibility: hidden !important;}
     .viewerBadge_container__1QSob {display: none !important;}
-    .stAppDeployButton {display: none !important;}
     
     /* 오른쪽 아래 끈질긴 팝업 배지 강제 삭제 */
     iframe[title="streamlitApp"] + div {display: none !important;}
     div.stApp [class^="viewerBadge_"] {display: none !important;}
     </style>
     """, unsafe_allow_html=True)
+
 # 1. 페이지 초기 설정 및 DB 생성
 st.set_page_config(
     page_title="카스테크(CAS-TECH) 현장 점검 관리",
