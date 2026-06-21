@@ -415,6 +415,32 @@ def inject_custom_css():
 
 inject_custom_css()
 
+# 쿼리 파라미터 동기화 함수 정의
+def sync_query_params():
+    # 1. 작업자 동기화
+    if st.session_state.get("authenticated") and st.session_state.get("login_worker"):
+        if st.query_params.get("worker") != st.session_state.login_worker:
+            st.query_params["worker"] = st.session_state.login_worker
+    else:
+        if "worker" in st.query_params:
+            del st.query_params["worker"]
+            
+    # 2. 거래처 동기화
+    if st.session_state.get("selected_client"):
+        if st.query_params.get("client") != st.session_state.selected_client:
+            st.query_params["client"] = st.session_state.selected_client
+    else:
+        if "client" in st.query_params:
+            del st.query_params["client"]
+            
+    # 3. 메뉴 동기화
+    if st.session_state.get("new_eq_form_open") and st.session_state.get("mgmt_sub_menu"):
+        if st.query_params.get("menu") != st.session_state.mgmt_sub_menu:
+            st.query_params["menu"] = st.session_state.mgmt_sub_menu
+    else:
+        if "menu" in st.query_params:
+            del st.query_params["menu"]
+
 # 3. 세션 상태 초기화
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -444,27 +470,28 @@ if "search_performed" not in st.session_state:
     st.session_state.search_performed = False
 
 # 1-1. URL 쿼리 파라미터 처리 (HTML A 태그 클릭 대응 - 로그인 복구 기능 포함)
-if "worker" in st.query_params or "client" in st.query_params or "menu" in st.query_params:
-    if "worker" in st.query_params:
-        st.session_state.authenticated = True
-        st.session_state.login_worker = st.query_params["worker"]
-    if "client" in st.query_params:
-        st.session_state.selected_client = st.query_params["client"]
-        st.session_state.selected_eq_id = None
-        st.session_state.search_filter_id = None
-        st.session_state.show_all = True
-        st.session_state.edit_mode = False
-        st.session_state.search_result_eq_id = None
-        st.session_state.search_query = ""
-        st.session_state.last_search_query = ""
-        st.session_state.search_performed = False
-    if "menu" in st.query_params:
+if "worker" in st.query_params and not st.session_state.authenticated:
+    st.session_state.authenticated = True
+    st.session_state.login_worker = st.query_params["worker"]
+
+if "client" in st.query_params and st.session_state.selected_client != st.query_params["client"]:
+    st.session_state.selected_client = st.query_params["client"]
+    st.session_state.selected_eq_id = None
+    st.session_state.search_filter_id = None
+    st.session_state.show_all = True
+    st.session_state.edit_mode = False
+    st.session_state.search_result_eq_id = None
+    st.session_state.search_query = ""
+    st.session_state.last_search_query = ""
+    st.session_state.search_performed = False
+
+if "menu" in st.query_params:
+    if st.session_state.mgmt_sub_menu != st.query_params["menu"]:
         st.session_state.mgmt_sub_menu = st.query_params["menu"]
         st.session_state.new_eq_form_open = True
-    else:
-        st.session_state.mgmt_sub_menu = None
-    st.query_params.clear()
-    st.rerun()
+
+# 파라미터 로딩 완료 후 실시간으로 쿼리 파라미터 싱크
+sync_query_params()
 
 # --- 콜백 함수 정의 ---
 # (QR 기능이 제거되어 이전 함수는 삭제됨)
@@ -507,6 +534,7 @@ if not st.session_state.authenticated:
                     st.session_state.login_worker = final_worker
                     st.session_state.selected_client = None  # 로그인 시 항상 거래처 선택 화면이 첫 화면으로 나오도록 초기화
                     st.success(f"{final_worker}님 로그인 성공!")
+                    sync_query_params()
                     st.rerun()
                     
     st.stop() # 로그인이 완료되지 않았으므로 아래의 모든 코드 실행 중단 및 화면 잠금
@@ -606,6 +634,7 @@ else:
                 st.session_state.search_query = ""
                 st.session_state.last_search_query = ""
                 st.session_state.search_performed = False
+            sync_query_params()
             st.rerun()
             
     with col_top_btns[1]:
@@ -613,6 +642,7 @@ else:
             st.session_state.new_eq_form_open = not st.session_state.new_eq_form_open
             if not st.session_state.new_eq_form_open:
                 st.session_state.mgmt_sub_menu = None
+            sync_query_params()
             st.rerun()
             
     st.write("") # 작은 공백 여백
@@ -693,6 +723,7 @@ else:
                             st.success(msg)
                             st.session_state.new_eq_form_open = False
                             st.session_state.mgmt_sub_menu = None
+                            sync_query_params()
                             st.rerun()
                         else:
                             st.error(msg)
