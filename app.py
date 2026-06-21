@@ -14,8 +14,11 @@ def generate_pdf_report(client_name, start_date_str, end_date_str, selected_eq_s
     pdf = FPDF()
     pdf.add_page()
     
-    # Register Windows malgun font for Korean Unicode support
-    pdf.add_font("Malgun", "", "C:/Windows/Fonts/malgun.ttf")
+    # Register font for Korean Unicode support (check local packaged font first)
+    font_path = "NanumGothic.ttf"
+    if not os.path.exists(font_path):
+        font_path = "C:/Windows/Fonts/malgun.ttf"
+    pdf.add_font("Malgun", "", font_path)
     pdf.set_font("Malgun", size=16)
     
     # Title
