@@ -7,6 +7,70 @@ import os
 from datetime import datetime
 import database
 import urllib.parse
+from fpdf import FPDF
+
+# PDF 보고서 생성 헬퍼 함수 정의
+def generate_pdf_report(client_name, start_date_str, end_date_str, selected_eq_str, histories):
+    pdf = FPDF()
+    pdf.add_page()
+    
+    # Register Windows malgun font for Korean Unicode support
+    pdf.add_font("Malgun", "", "C:/Windows/Fonts/malgun.ttf")
+    pdf.set_font("Malgun", size=16)
+    
+    # Title
+    pdf.cell(w=0, h=10, text="🔧 수리/점검 내역 보고서", new_x="LMARGIN", new_y="NEXT", align="C")
+    pdf.ln(5)
+    
+    # Metadata info card
+    pdf.set_font("Malgun", size=10)
+    pdf.cell(w=0, h=6, text=f"• 거래처명: {client_name}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(w=0, h=6, text=f"• 조회기간: {start_date_str} ~ {end_date_str}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(w=0, h=6, text=f"• 조회대상: {selected_eq_str}", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(w=0, h=6, text=f"• 총 점검 건수: {len(histories)}건", new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(w=0, h=6, text=f"• 보고서 출력일시: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(10)
+    
+    # Table Header
+    pdf.set_font("Malgun", size=9)
+    col_widths = [10, 22, 22, 16, 40, 80]
+    headers = ["No", "날짜", "계기 ID", "작업자", "증상 및 상태", "조치 및 수리내용"]
+    
+    # Draw headers with borders
+    for w, header in zip(col_widths, headers):
+        pdf.cell(w=w, h=8, text=header, border=1, align="C")
+    pdf.ln()
+    
+    # Table Rows
+    pdf.set_font("Malgun", size=8)
+    for idx, h in enumerate(histories, 1):
+        dt = (h.get("날짜_시간") or "")[:10]
+        eq_id = h.get("설비ID") or ""
+        worker = h.get("작업자명") or ""
+        symptom = h.get("증상상태") or ""
+        action = h.get("조치_및_수리내용") or ""
+        
+        # Clean string values to prevent formatting issues in FPDF
+        symptom = symptom.replace("\n", " ").strip()
+        action = action.replace("\n", " ").strip()
+        
+        # Clip strings to fit cells nicely
+        if len(symptom) > 20:
+            symptom = symptom[:18] + ".."
+        if len(action) > 42:
+            action = action[:40] + ".."
+            
+        row_vals = [str(idx), dt, eq_id, worker, symptom, action]
+        for w, val in zip(col_widths, row_vals):
+            pdf.cell(w=w, h=8, text=val, border=1)
+        pdf.ln()
+        
+    # Footer signature
+    pdf.ln(15)
+    pdf.set_font("Malgun", size=11)
+    pdf.cell(w=0, h=10, text="카스테크 (CAS-TECH) 기술팀", new_x="LMARGIN", new_y="NEXT", align="R")
+    
+    return bytes(pdf.output())
 
 # 1. 페이지 초기 설정 및 DB 생성
 st.set_page_config(
@@ -665,68 +729,151 @@ else:
         
         submenu_html = f"""
         <div class="submenu-container">
-            <a href="{href_new_eq}" target="_self" class="submenu-item {active_new_eq}">➕ 신규계기등록</a>
-            <a href="{href_history}" target="_self" class="submenu-item {active_history}">📅 기간별 수리/점검내역</a>
+            <a href="{href_new_eq}" target="_self" class="submenu-item {active_new_eq}">➕ 계기등록및수정</a>
+            <a href="{href_history}" target="_self" class="submenu-item {active_history}">📅 수리점검내역</a>
         </div>
         """
         st.markdown(submenu_html, unsafe_allow_html=True)
         
         if st.session_state.mgmt_sub_menu == "new_eq":
             st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
-            with st.form("new_eq_form", clear_on_submit=True):
-                new_id = st.text_input("설비 ID (필수)", placeholder="예: WE-1308")
-                new_name = st.text_input("설비명 (필수)", placeholder="예: 입식 지게차 2000kg")
-                new_loc = st.text_input("설치위치")
-                new_ip = st.text_input("계측기 IP")
-                new_ind = st.text_input("인디게이터")
-                new_lc = st.text_input("로드셀")
-                new_fmt = st.text_input("형식")
-                new_date = st.text_input("설치년월")
-                
-                # 사진 첨부
-                photo1 = st.file_uploader("설비 사진 1", type=["png", "jpg", "jpeg"])
-                photo2 = st.file_uploader("설비 사진 2", type=["png", "jpg", "jpeg"])
-                
-                submit_new = st.form_submit_button("💾 등록하기")
-                if submit_new:
-                    if not new_id or not new_name:
-                        st.error("설비 ID와 설비명은 필수 입력 항목입니다.")
-                    else:
-                        # 사진 파일 로컬 저장
-                        p1_path = ""
-                        p2_path = ""
-                        if photo1:
-                            p1_path = os.path.join(PHOTOS_DIR, f"{new_id}_1.jpg")
-                            with open(p1_path, "wb") as f:
-                                f.write(photo1.getbuffer())
-                        if photo2:
-                            p2_path = os.path.join(PHOTOS_DIR, f"{new_id}_2.jpg")
-                            with open(p2_path, "wb") as f:
-                                f.write(photo2.getbuffer())
-                                
-                        eq_data = {
-                            "거래처명": st.session_state.selected_client,
-                            "설비ID": new_id.strip(),
-                            "설비명": new_name.strip(),
-                            "설치위치": new_loc.strip(),
-                            "계측기_IP": new_ip.strip(),
-                            "인디게이터": new_ind.strip(),
-                            "로드셀": new_lc.strip(),
-                            "형식": new_fmt.strip(),
-                            "설치년월": new_date.strip(),
-                            "설비사진1": p1_path,
-                            "설비사진2": p2_path
-                        }
-                        
-                        ok, msg = database.add_equipment(eq_data)
-                        if ok:
-                            st.success(msg)
-                            st.session_state.new_eq_form_open = False
-                            st.session_state.mgmt_sub_menu = None
-                            sync_query_params()
-                            st.rerun()
+            
+            mode = st.radio("작업 모드 선택", options=["➕ 신규 계기 등록", "✏️ 기존 계기 정보 수정"], horizontal=True, key="eq_mgmt_mode")
+            st.markdown('<div style="height: 15px;"></div>', unsafe_allow_html=True)
+            
+            eq_list = database.get_equipments(st.session_state.selected_client)
+            
+            if mode == "➕ 신규 계기 등록":
+                with st.form("new_eq_form", clear_on_submit=True):
+                    new_id = st.text_input("설비 ID (필수)", placeholder="예: WE-1308")
+                    new_name = st.text_input("설비명 (필수)", placeholder="예: 입식 지게차 2000kg")
+                    new_loc = st.text_input("설치위치")
+                    new_ip = st.text_input("계측기 IP")
+                    new_ind = st.text_input("인디게이터")
+                    new_lc = st.text_input("로드셀")
+                    new_fmt = st.text_input("형식")
+                    new_date = st.text_input("설치년월")
+                    
+                    # 사진 첨부
+                    photo1 = st.file_uploader("설비 사진 1", type=["png", "jpg", "jpeg"])
+                    photo2 = st.file_uploader("설비 사진 2", type=["png", "jpg", "jpeg"])
+                    
+                    submit_new = st.form_submit_button("💾 등록하기")
+                    if submit_new:
+                        if not new_id or not new_name:
+                            st.error("설비 ID와 설비명은 필수 입력 항목입니다.")
                         else:
-                            st.error(msg)
+                            # 사진 파일 로컬 저장
+                            p1_path = ""
+                            p2_path = ""
+                            if photo1:
+                                p1_path = os.path.join(PHOTOS_DIR, f"{new_id}_1.jpg")
+                                with open(p1_path, "wb") as f:
+                                    f.write(photo1.getbuffer())
+                            if photo2:
+                                p2_path = os.path.join(PHOTOS_DIR, f"{new_id}_2.jpg")
+                                with open(p2_path, "wb") as f:
+                                    f.write(photo2.getbuffer())
+                                    
+                            eq_data = {
+                                "거래처명": st.session_state.selected_client,
+                                "설비ID": new_id.strip(),
+                                "설비명": new_name.strip(),
+                                "설치위치": new_loc.strip(),
+                                "계측기_IP": new_ip.strip(),
+                                "인디게이터": new_ind.strip(),
+                                "로드셀": new_lc.strip(),
+                                "형식": new_fmt.strip(),
+                                "설치년월": new_date.strip(),
+                                "설비사진1": p1_path,
+                                "설비사진2": p2_path
+                            }
+                            
+                            ok, msg = database.add_equipment(eq_data)
+                            if ok:
+                                st.success(msg)
+                                st.session_state.new_eq_form_open = False
+                                st.session_state.mgmt_sub_menu = None
+                                sync_query_params()
+                                st.rerun()
+                            else:
+                                st.error(msg)
+            else:
+                # 기존 계기 정보 수정 모드
+                if not eq_list:
+                    st.info("수정할 수 있는 계기가 없습니다. 신규 등록을 먼저 해주세요.")
+                else:
+                    eq_options = [f"[{eq['설비ID']}] {eq['설비명']}" for eq in eq_list]
+                    selected_eq_str = st.selectbox("수정할 계기 선택", options=eq_options)
+                    selected_idx = eq_options.index(selected_eq_str)
+                    eq_data = eq_list[selected_idx]
+                    
+                    with st.form("edit_eq_form", clear_on_submit=False):
+                        edit_id = st.text_input("설비 ID (필수)", value=eq_data["설비ID"])
+                        edit_name = st.text_input("설비명 (필수)", value=eq_data["설비명"])
+                        edit_loc = st.text_input("설치위치", value=eq_data["설치위치"] or "")
+                        edit_ip = st.text_input("계측기 IP", value=eq_data["계측기_IP"] or "")
+                        edit_ind = st.text_input("인디게이터", value=eq_data["인디게이터"] or "")
+                        edit_lc = st.text_input("로드셀", value=eq_data["로드셀"] or "")
+                        edit_fmt = st.text_input("형식", value=eq_data["형식"] or "")
+                        edit_date = st.text_input("설치년월", value=eq_data["설치년월"] or "")
+                        
+                        st.write("🖼️ **기존 설비 사진**")
+                        col_pic1, col_pic2 = st.columns(2)
+                        with col_pic1:
+                            if eq_data["설비사진1"] and os.path.exists(eq_data["설비사진1"]):
+                                st.image(eq_data["설비사진1"], caption="설비사진 1", use_container_width=True)
+                            else:
+                                st.caption("등록된 사진 1 없음")
+                        with col_pic2:
+                            if eq_data["설비사진2"] and os.path.exists(eq_data["설비사진2"]):
+                                st.image(eq_data["설비사진2"], caption="설비사진 2", use_container_width=True)
+                            else:
+                                st.caption("등록된 사진 2 없음")
+                                
+                        edit_photo1 = st.file_uploader("새 설비 사진 1 업로드 (기존 사진을 변경하려면 업로드)", type=["png", "jpg", "jpeg"])
+                        edit_photo2 = st.file_uploader("새 설비 사진 2 업로드 (기존 사진을 변경하려면 업로드)", type=["png", "jpg", "jpeg"])
+                        
+                        submit_edit = st.form_submit_button("💾 수정 완료")
+                        if submit_edit:
+                            if not edit_id or not edit_name:
+                                st.error("설비 ID와 설비명은 필수 입력 항목입니다.")
+                            else:
+                                # 사진 파일 처리 (업로드 하지 않았으면 기존 경로 유지)
+                                p1_path = eq_data["설비사진1"] or ""
+                                p2_path = eq_data["설비사진2"] or ""
+                                if edit_photo1:
+                                    p1_path = os.path.join(PHOTOS_DIR, f"{edit_id}_1.jpg")
+                                    with open(p1_path, "wb") as f:
+                                        f.write(edit_photo1.getbuffer())
+                                if edit_photo2:
+                                    p2_path = os.path.join(PHOTOS_DIR, f"{edit_id}_2.jpg")
+                                    with open(p2_path, "wb") as f:
+                                        f.write(edit_photo2.getbuffer())
+                                        
+                                updated_eq_data = {
+                                    "거래처명": st.session_state.selected_client,
+                                    "설비ID": edit_id.strip(),
+                                    "설비명": edit_name.strip(),
+                                    "설치위치": edit_loc.strip(),
+                                    "계측기_IP": edit_ip.strip(),
+                                    "인디게이터": edit_ind.strip(),
+                                    "로드셀": edit_lc.strip(),
+                                    "형식": edit_fmt.strip(),
+                                    "설치년월": edit_date.strip(),
+                                    "설비사진1": p1_path,
+                                    "설비사진2": p2_path
+                                }
+                                
+                                ok, msg = database.update_equipment(eq_data["설비ID"], updated_eq_data)
+                                if ok:
+                                    st.success(msg)
+                                    st.session_state.new_eq_form_open = False
+                                    st.session_state.mgmt_sub_menu = None
+                                    sync_query_params()
+                                    st.rerun()
+                                else:
+                                    st.error(msg)
                             
         elif st.session_state.mgmt_sub_menu == "history":
             st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
@@ -738,10 +885,21 @@ else:
                 default_end = datetime.today().date()
                 end_date = st.date_input("조회 종료일", value=default_end, key="mgmt_end_date")
                 
+            # 계기별 필터 선택 박스 추가
+            eq_list = database.get_equipments(st.session_state.selected_client)
+            eq_options = ["전체 계기"] + [f"[{eq['설비ID']}] {eq['설비명']}" for eq in eq_list]
+            selected_eq_filter = st.selectbox("조회할 계기 선택 (계기별)", options=eq_options)
+            
+            target_eq_id = None
+            if selected_eq_filter != "전체 계기":
+                target_eq_id = selected_eq_filter.split("]")[0].replace("[", "").strip()
+                
             all_histories = database.get_histories()
             filtered_histories = []
             for h in all_histories:
                 if h["거래처명"] != st.session_state.selected_client:
+                    continue
+                if target_eq_id and h["설비ID"] != target_eq_id:
                     continue
                 dt_str = h["날짜_시간"]
                 if not dt_str:
@@ -756,6 +914,25 @@ else:
                     
             if filtered_histories:
                 st.write(f"📋 **조회된 수리/점검 내역 ({len(filtered_histories)}건)**")
+                
+                # PDF 보고서 생성 및 다운로드 버튼
+                pdf_data = generate_pdf_report(
+                    st.session_state.selected_client,
+                    start_date.strftime("%Y-%m-%d"),
+                    end_date.strftime("%Y-%m-%d"),
+                    selected_eq_filter,
+                    filtered_histories
+                )
+                
+                st.download_button(
+                    label="📄 PDF 보고서 출력 및 다운로드",
+                    data=pdf_data,
+                    file_name=f"수리점검보고서_{st.session_state.selected_client}_{datetime.now().strftime('%Y%m%d')}.pdf",
+                    mime="application/pdf",
+                    key="btn_download_pdf_report",
+                    use_container_width=True
+                )
+                st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
                 for item in filtered_histories:
                     eq_detail = database.get_equipment_by_id(item['설비ID'])
                     eq_name = eq_detail['설비명'] if eq_detail else "알 수 없는 설비"
@@ -788,7 +965,7 @@ else:
                     💡 위의 메뉴에서 실행할 작업을 선택해 주세요.
                 </p>
                 <p style="margin: 8px 0 0 0; font-size: 14px; color: #3b82f6;">
-                    신규 계기를 등록하려면 <b>신규계기등록</b>을, 거래처의 기간별 수리/점검내역을 조회하려면 <b>기간별 수리/점검내역</b>을 터치하세요.
+                    계기를 등록하거나 수정하려면 <b>계기등록및수정</b>을, 거래처의 수리/점검내역을 조회하려면 <b>수리점검내역</b>을 터치하세요.
                 </p>
             </div>
             """, unsafe_allow_html=True)

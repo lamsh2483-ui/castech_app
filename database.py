@@ -333,6 +333,42 @@ def rename_client(old_name, new_name):
     finally:
         conn.close()
 
+def update_equipment(eq_id, eq_data):
+    """기존 계기의 정보를 수정합니다. 설비ID 자체도 변경될 수 있으므로, 기존 ID를 기준으로 UPDATE합니다."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("""
+            UPDATE 설비마스터 SET
+                설비ID = ?,
+                설비명 = ?,
+                설치위치 = ?,
+                계측기_IP = ?,
+                인디게이터 = ?,
+                로드셀 = ?,
+                형식 = ?,
+                설치년월 = ?,
+                설비사진1 = ?,
+                설비사진2 = ?
+            WHERE 설비ID = ?
+        """, (
+            eq_data.get("설비ID"), eq_data.get("설비명"), 
+            eq_data.get("설치위치"), eq_data.get("계측기_IP"), eq_data.get("인디게이터"), 
+            eq_data.get("로드셀"), eq_data.get("형식"), eq_data.get("설치년월"), 
+            eq_data.get("설비사진1"), eq_data.get("설비사진2"), eq_id
+        ))
+        
+        # 만약 설비ID가 변경되었다면 관련 점검이력 테이블의 설비ID도 업데이트
+        if eq_id != eq_data.get("설비ID"):
+            cursor.execute("UPDATE 점검이력 SET 설비ID = ? WHERE 설비ID = ?", (eq_data.get("설비ID"), eq_id))
+            
+        conn.commit()
+        return True, "계기 정보가 성공적으로 수정되었습니다."
+    except Exception as e:
+        return False, f"계기 정보 수정 실패: {str(e)}"
+    finally:
+        conn.close()
+
 if __name__ == "__main__":
     # 스크립트 단독 실행 시 데이터베이스 초기화 테스트
     success, msg = init_db()

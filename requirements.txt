@@ -1,2 +1,7 @@
-opencv-python-headless
 streamlit
+pandas
+openpyxl
+opencv-python-headless
+numpy
+pillow
+fpdf2
