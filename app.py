@@ -7,6 +7,16 @@ import os
 from datetime import datetime
 import database
 
+# 우측 상단 깃허브 메뉴 및 우측 하단 스트림릿 로고 숨기기 코드
+st.markdown("""
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    .viewerBadge_container__1QSob {display: none !important;}
+    header {visibility: hidden;}
+    </style>
+    """, unsafe_allow_html=True)
+
 # 1. 페이지 초기 설정 및 DB 생성
 st.set_page_config(
     page_title="카스테크(CAS-TECH) 현장 점검 관리",
