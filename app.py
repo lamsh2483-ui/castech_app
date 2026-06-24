@@ -590,38 +590,43 @@ if "search_performed" not in st.session_state:
     st.session_state.search_performed = False
 if "sync_logs" not in st.session_state:
     st.session_state.sync_logs = []
+if "query_params_loaded" not in st.session_state:
+    st.session_state.query_params_loaded = False
 
-# 1-1. URL 쿼리 파라미터 처리 (HTML A 태그 클릭 대응 - 로그인 복구 기능 포함)
-if "worker" in st.query_params and not st.session_state.authenticated:
-    st.session_state.authenticated = True
-    st.session_state.login_worker = st.query_params["worker"]
-
-if "client" in st.query_params and st.session_state.selected_client != st.query_params["client"]:
-    st.session_state.selected_client = st.query_params["client"]
-    st.session_state.selected_eq_id = None
-    st.session_state.search_filter_id = None
-    st.session_state.show_all = True
-    st.session_state.edit_mode = False
-    st.session_state.search_result_eq_id = None
-    st.session_state.search_query = ""
-    st.session_state.last_search_query = ""
-    st.session_state.search_performed = False
-
-# 1-2. URL 쿼리 파라미터 처리 (검색어 복구)
-if "q" in st.query_params:
-    st.session_state.search_query = st.query_params["q"]
-    st.session_state.last_search_query = st.query_params["q"]
-    st.session_state.search_performed = True
-
-# 1-3. URL 쿼리 파라미터 처리 (설비 ID 복구)
-if "eq_id" in st.query_params and st.session_state.selected_eq_id != st.query_params["eq_id"]:
-    st.session_state.selected_eq_id = st.query_params["eq_id"]
-    st.session_state.search_result_eq_id = st.query_params["eq_id"]
-
-if "menu" in st.query_params:
-    if st.session_state.mgmt_sub_menu != st.query_params["menu"]:
-        st.session_state.mgmt_sub_menu = st.query_params["menu"]
-        st.session_state.new_eq_form_open = True
+# 1-1. URL 쿼리 파라미터 처리 (HTML A 태그 클릭 대응 - 로그인 복구 기능 포함 - 최초 1회만 실행)
+if not st.session_state.query_params_loaded:
+    if "worker" in st.query_params and not st.session_state.authenticated:
+        st.session_state.authenticated = True
+        st.session_state.login_worker = st.query_params["worker"]
+    
+    if "client" in st.query_params and st.session_state.selected_client != st.query_params["client"]:
+        st.session_state.selected_client = st.query_params["client"]
+        st.session_state.selected_eq_id = None
+        st.session_state.search_filter_id = None
+        st.session_state.show_all = True
+        st.session_state.edit_mode = False
+        st.session_state.search_result_eq_id = None
+        st.session_state.search_query = ""
+        st.session_state.last_search_query = ""
+        st.session_state.search_performed = False
+    
+    # 1-2. URL 쿼리 파라미터 처리 (검색어 복구)
+    if "q" in st.query_params:
+        st.session_state.search_query = st.query_params["q"]
+        st.session_state.last_search_query = st.query_params["q"]
+        st.session_state.search_performed = True
+    
+    # 1-3. URL 쿼리 파라미터 처리 (설비 ID 복구)
+    if "eq_id" in st.query_params and st.session_state.selected_eq_id != st.query_params["eq_id"]:
+        st.session_state.selected_eq_id = st.query_params["eq_id"]
+        st.session_state.search_result_eq_id = st.query_params["eq_id"]
+    
+    if "menu" in st.query_params:
+        if st.session_state.mgmt_sub_menu != st.query_params["menu"]:
+            st.session_state.mgmt_sub_menu = st.query_params["menu"]
+            st.session_state.new_eq_form_open = True
+            
+    st.session_state.query_params_loaded = True
 
 # 파라미터 로딩 완료 후 실시간으로 쿼리 파라미터 싱크
 sync_query_params()
