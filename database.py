@@ -7,8 +7,9 @@ import urllib.request
 import urllib.error
 import functools
 
-DB_FILE = "castech.db"
-EXCEL_FILE = "설비이력 및 점검마스터.xlsx"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_FILE = os.path.join(BASE_DIR, "castech.db")
+EXCEL_FILE = os.path.join(BASE_DIR, "설비이력 및 점검마스터.xlsx")
 
 def get_github_config():
     """Streamlit secrets 또는 로컬 github_config.json에서 설정 정보를 로드합니다."""
@@ -47,30 +48,22 @@ def sync_pull_from_github():
         print("GitHub configuration missing. Skipping Pull.")
         return False
         
+    # 캐시 지연을 완벽하게 예방하기 위해 raw 미디어 타입을 직접 요청
     headers = {
         "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3+json",
+        "Accept": "application/vnd.github.v3.raw",
         "User-Agent": "Antigravity-Agent"
     }
     
     import urllib.parse
-    safe_path = urllib.parse.quote(DB_FILE)
+    safe_path = urllib.parse.quote("castech.db")
     url = f"https://api.github.com/repos/{repo}/contents/{safe_path}?ref={branch}"
     req = urllib.request.Request(url, headers=headers)
     
     try:
         print("Attempting to pull castech.db from GitHub...")
         with urllib.request.urlopen(req) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            
-        download_url = data.get("download_url")
-        if not download_url:
-            content_b64 = data.get("content", "").replace("\n", "")
-            db_content = base64.b64decode(content_b64)
-        else:
-            raw_req = urllib.request.Request(download_url, headers=headers)
-            with urllib.request.urlopen(raw_req) as raw_response:
-                db_content = raw_response.read()
+            db_content = response.read()
                 
         # DB 파일 덮어쓰기
         with open(DB_FILE, "wb") as f:
@@ -122,10 +115,10 @@ def sync_push_to_github():
     content_b64 = base64.b64encode(content_bytes).decode("utf-8")
     
     # 기존 파일의 SHA 조회
-    sha = get_github_file_sha(token, repo, branch, DB_FILE)
+    sha = get_github_file_sha(token, repo, branch, "castech.db")
     
     import urllib.parse
-    safe_path = urllib.parse.quote(DB_FILE)
+    safe_path = urllib.parse.quote("castech.db")
     url = f"https://api.github.com/repos/{repo}/contents/{safe_path}"
     
     payload = {
