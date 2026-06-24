@@ -1125,7 +1125,7 @@ class AdminMainWindow(QMainWindow):
         QApplication.processEvents()
         
         # GitHub API GET /repos/{owner}/{repo}/contents/castech.db
-        url = f"https://api.github.com/repos/{repo}/contents/{database.DB_FILE}?ref={branch}"
+        url = f"https://api.github.com/repos/{repo}/contents/castech.db?ref={branch}"
         req = urllib.request.Request(url)
         req.add_header("Authorization", f"token {token}")
         req.add_header("Accept", "application/vnd.github.v3+json")
@@ -1167,7 +1167,7 @@ class AdminMainWindow(QMainWindow):
         QApplication.processEvents()
         
         # 1단계: 원격 저장소에 있는 현재 파일의 SHA 값 가져오기
-        url_get = f"https://api.github.com/repos/{repo}/contents/{database.DB_FILE}?ref={branch}"
+        url_get = f"https://api.github.com/repos/{repo}/contents/castech.db?ref={branch}"
         req_get = urllib.request.Request(url_get)
         req_get.add_header("Authorization", f"token {token}")
         req_get.add_header("Accept", "application/vnd.github.v3+json")
@@ -1193,7 +1193,7 @@ class AdminMainWindow(QMainWindow):
             return
             
         # 3단계: GitHub API PUT /repos/{owner}/{repo}/contents/castech.db
-        url_put = f"https://api.github.com/repos/{repo}/contents/{database.DB_FILE}"
+        url_put = f"https://api.github.com/repos/{repo}/contents/castech.db"
         payload = {
             "message": f"Update castech.db from Admin Control Program [Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]",
             "content": content_b64,
