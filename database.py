@@ -692,7 +692,7 @@ def register_new_worker(name, password):
 
 def upload_photo_to_github(file_path):
     """지정한 사진 파일을 GitHub 저장소에 업로드합니다."""
-    if not file_path:
+    if not file_path or not isinstance(file_path, str):
         return False
     # 경로 정규화 (역슬래시를 슬래시로 변경하여 GitHub 경로 형식 준수)
     normalized_path = file_path.replace("\\", "/")
@@ -750,7 +750,7 @@ def upload_photo_to_github(file_path):
 
 def download_photo_from_github(file_path):
     """로컬에 사진이 없는 경우, GitHub 저장소에서 원본 사진을 실시간으로 가져와 로컬에 저장합니다."""
-    if not file_path:
+    if not file_path or not isinstance(file_path, str):
         return False
     # 이미 로컬에 파일이 있으면 다운로드 불필요
     if os.path.exists(file_path):
