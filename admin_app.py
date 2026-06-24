@@ -321,6 +321,10 @@ class AdminMainWindow(QMainWindow):
         self.clients_table.setColumnCount(1)
         self.clients_table.setHorizontalHeaderLabels(["거래처명"])
         self.clients_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.clients_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.clients_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.clients_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.clients_table.itemDoubleClicked.connect(self.on_client_double_clicked)
         self.clients_table.itemChanged.connect(self.on_client_cell_edited)
         clients_layout.addWidget(self.clients_table)
         
@@ -780,6 +784,15 @@ class AdminMainWindow(QMainWindow):
         else:
             QMessageBox.critical(self, "오류", msg)
             self.load_clients_table()
+
+    def on_client_double_clicked(self, item):
+        if item:
+            client_name = item.text().strip()
+            if client_name:
+                # 📐 계기 사양 (Machines) 탭으로 전환 (인덱스 1)
+                self.sub_tabs.setCurrentIndex(1)
+                # 해당 거래처명으로 필터 지정하여 이외의 거래처는 보이지 않게 함
+                self.filter_client_combo.setCurrentText(client_name)
 
     def on_eq_cell_edited(self, item):
         row = item.row()
