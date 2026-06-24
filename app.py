@@ -482,6 +482,34 @@ def inject_custom_css():
 
 inject_custom_css()
 
+# Streamlit Cloud의 iframe 주소창을 부모 브라우저 주소창과 강제 동기화하는 JS 인젝션
+import streamlit.components.v1 as components
+components.html(
+    """
+    <script>
+    if (window.parent && window.parent.location) {
+        const checkAndSync = () => {
+            try {
+                const currentQuery = window.location.search;
+                const parentQuery = window.parent.location.search;
+                if (currentQuery !== parentQuery) {
+                    window.parent.history.replaceState(null, null, currentQuery);
+                }
+            } catch (e) {
+                // 크로스 도메인 보안 제약 예방
+                console.error(e);
+            }
+        };
+        checkAndSync();
+        window.addEventListener('popstate', checkAndSync);
+        setInterval(checkAndSync, 400); // 0.4초 간격으로 강제 갱신
+    }
+    </script>
+    """,
+    height=0,
+    width=0
+)
+
 # 쿼리 파라미터 동기화 함수 정의
 def sync_query_params():
     # 1. 작업자 동기화
