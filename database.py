@@ -690,6 +690,107 @@ def register_new_worker(name, password):
     finally:
         conn.close()
 
+def upload_photo_to_github(file_path):
+    """지정한 사진 파일을 GitHub 저장소에 업로드합니다."""
+    if not file_path:
+        return False
+    # 경로 정규화 (역슬래시를 슬래시로 변경하여 GitHub 경로 형식 준수)
+    normalized_path = file_path.replace("\\", "/")
+    
+    if not os.path.exists(file_path):
+        log_sync_error(f"업로드할 로컬 사진 파일이 존재하지 않습니다: {file_path}")
+        return False
+        
+    token, repo, branch = get_github_config()
+    if not token or not repo:
+        log_sync_error("GitHub 설정이 누락되어 사진 Push를 스킵합니다.")
+        return False
+        
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Antigravity-Agent"
+    }
+    
+    # 로컬 파일 읽기 및 base64 인코딩
+    try:
+        with open(file_path, "rb") as f:
+            content_bytes = f.read()
+        content_b64 = base64.b64encode(content_bytes).decode("utf-8")
+    except Exception as e:
+        log_sync_error(f"사진 파일 읽기 및 base64 변환 에러: {file_path}", str(e))
+        return False
+        
+    # 기존 파일의 SHA 조회
+    sha = get_github_file_sha(token, repo, branch, normalized_path)
+    
+    import urllib.parse
+    safe_path = urllib.parse.quote(normalized_path)
+    url = f"https://api.github.com/repos/{repo}/contents/{safe_path}"
+    
+    payload = {
+        "message": f"Auto-sync photo upload: {normalized_path}",
+        "content": content_b64,
+        "branch": branch
+    }
+    if sha:
+        payload["sha"] = sha
+        
+    req_data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=req_data, headers=headers, method="PUT")
+    
+    try:
+        print(f"Attempting to push photo {normalized_path} to GitHub...")
+        with urllib.request.urlopen(req) as response:
+            print(f"Successfully pushed photo {normalized_path} to GitHub.")
+            return True
+    except Exception as e:
+        log_sync_error(f"GitHub로 사진 업로드(Push) 실패: {normalized_path}", str(e))
+        return False
+
+def download_photo_from_github(file_path):
+    """로컬에 사진이 없는 경우, GitHub 저장소에서 원본 사진을 실시간으로 가져와 로컬에 저장합니다."""
+    if not file_path:
+        return False
+    # 이미 로컬에 파일이 있으면 다운로드 불필요
+    if os.path.exists(file_path):
+        return True
+        
+    # 경로 정규화 (역슬래시를 슬래시로 변경하여 GitHub 경로 형식 준수)
+    normalized_path = file_path.replace("\\", "/")
+    
+    token, repo, branch = get_github_config()
+    if not token or not repo:
+        return False
+        
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3.raw",
+        "User-Agent": "Antigravity-Agent"
+    }
+    
+    import urllib.parse
+    safe_path = urllib.parse.quote(normalized_path)
+    url = f"https://api.github.com/repos/{repo}/contents/{safe_path}?ref={branch}"
+    req = urllib.request.Request(url, headers=headers)
+    
+    try:
+        print(f"Attempting to pull photo {normalized_path} from GitHub...")
+        with urllib.request.urlopen(req) as response:
+            photo_content = response.read()
+            
+        # 로컬 폴더 생성
+        parent_dir = os.path.dirname(os.path.abspath(file_path))
+        os.makedirs(parent_dir, exist_ok=True)
+        
+        # 파일 저장
+        with open(file_path, "wb") as f:
+            f.write(photo_content)
+        print(f"Successfully downloaded photo {normalized_path} from GitHub.")
+        return True
+    except Exception as e:
+        return False
+
 if __name__ == "__main__":
     # 스크립트 단독 실행 시 데이터베이스 초기화 테스트
     success, msg = init_db()
