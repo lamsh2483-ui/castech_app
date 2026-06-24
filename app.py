@@ -782,7 +782,11 @@ else:
     st.write("") # 작은 공백 여백
     
     # 9-2. 새 계기 등록 및 목록 레이아웃
-    col_list, col_form = st.columns([2, 1]) if not st.session_state.new_eq_form_open else (None, None)
+    if not st.session_state.new_eq_form_open:
+        col_list = st.container()
+        col_form = st.container()
+    else:
+        col_list, col_form = None, None
     
     if st.session_state.new_eq_form_open:
         st.markdown('<div class="section-title">🔧 계기등록 및 관리</div>', unsafe_allow_html=True)
