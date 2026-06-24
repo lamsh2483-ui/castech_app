@@ -953,20 +953,26 @@ else:
                         edit_fmt = st.text_input("형식", value=eq_data["형식"] or "")
                         edit_date = st.text_input("설치년월", value=eq_data["설치년월"] or "")
                         
-                        st.write("🖼️ **기존 설비 사진**")
                         col_pic1, col_pic2 = st.columns(2)
+                        p1_path = eq_data["설비사진1"]
+                        p2_path = eq_data["설비사진2"]
+                        if p1_path and isinstance(p1_path, str):
+                            p1_path = p1_path.replace("\\", "/")
+                        if p2_path and isinstance(p2_path, str):
+                            p2_path = p2_path.replace("\\", "/")
+                            
                         with col_pic1:
-                            if eq_data["설비사진1"]:
-                                database.download_photo_from_github(eq_data["설비사진1"])
-                            if eq_data["설비사진1"] and os.path.exists(eq_data["설비사진1"]):
-                                st.image(eq_data["설비사진1"], caption="설비사진 1", use_container_width=True)
+                            if p1_path:
+                                database.download_photo_from_github(p1_path)
+                            if p1_path and os.path.exists(p1_path):
+                                st.image(p1_path, caption="설비사진 1", use_container_width=True)
                             else:
                                 st.caption("등록된 사진 1 없음")
                         with col_pic2:
-                            if eq_data["설비사진2"]:
-                                database.download_photo_from_github(eq_data["설비사진2"])
-                            if eq_data["설비사진2"] and os.path.exists(eq_data["설비사진2"]):
-                                st.image(eq_data["설비사진2"], caption="설비사진 2", use_container_width=True)
+                            if p2_path:
+                                database.download_photo_from_github(p2_path)
+                            if p2_path and os.path.exists(p2_path):
+                                st.image(p2_path, caption="설비사진 2", use_container_width=True)
                             else:
                                 st.caption("등록된 사진 2 없음")
                                 
@@ -1093,18 +1099,25 @@ else:
                         **[조치 및 수리내용]** {item['조치_및_수리내용'] or '-'}
                         """)
                         
-                        if item['사진1']:
-                            database.download_photo_from_github(item['사진1'])
-                        if item['사진2']:
-                            database.download_photo_from_github(item['사진2'])
-                        if (item['사진1'] and os.path.exists(item['사진1'])) or (item['사진2'] and os.path.exists(item['사진2'])):
+                        h_pic1 = item['사진1']
+                        h_pic2 = item['사진2']
+                        if h_pic1 and isinstance(h_pic1, str):
+                            h_pic1 = h_pic1.replace("\\", "/")
+                        if h_pic2 and isinstance(h_pic2, str):
+                            h_pic2 = h_pic2.replace("\\", "/")
+                            
+                        if h_pic1:
+                            database.download_photo_from_github(h_pic1)
+                        if h_pic2:
+                            database.download_photo_from_github(h_pic2)
+                        if (h_pic1 and os.path.exists(h_pic1)) or (h_pic2 and os.path.exists(h_pic2)):
                             col_pic1, col_pic2 = st.columns(2)
-                            if item['사진1'] and os.path.exists(item['사진1']):
+                            if h_pic1 and os.path.exists(h_pic1):
                                 with col_pic1:
-                                    st.image(item['사진1'], caption="조치 사진1", use_container_width=True)
-                            if item['사진2'] and os.path.exists(item['사진2']):
+                                    st.image(h_pic1, caption="조치 사진1", use_container_width=True)
+                            if h_pic2 and os.path.exists(h_pic2):
                                 with col_pic2:
-                                    st.image(item['사진2'], caption="조치 사진2", use_container_width=True)
+                                    st.image(h_pic2, caption="조치 사진2", use_container_width=True)
             else:
                 st.info("📅 해당 기간 내에 등록된 수리/점검 내역이 없습니다.")
         else:
@@ -1207,14 +1220,21 @@ else:
                     st.write(f"**로드셀:** {eq_detail['로드셀'] or '-'}")
                     
                     # 사진이 등록되어 있을 시 노출
-                    if eq_detail['설비사진1']:
-                        database.download_photo_from_github(eq_detail['설비사진1'])
-                    if eq_detail['설비사진2']:
-                        database.download_photo_from_github(eq_detail['설비사진2'])
-                    if eq_detail['설비사진1'] and os.path.exists(eq_detail['설비사진1']):
-                        st.image(eq_detail['설비사진1'], caption="설비사진 1", use_container_width=True)
-                    if eq_detail['설비사진2'] and os.path.exists(eq_detail['설비사진2']):
-                        st.image(eq_detail['설비사진2'], caption="설비사진 2", use_container_width=True)
+                    p1_path = eq_detail['설비사진1']
+                    p2_path = eq_detail['설비사진2']
+                    if p1_path and isinstance(p1_path, str):
+                        p1_path = p1_path.replace("\\", "/")
+                    if p2_path and isinstance(p2_path, str):
+                        p2_path = p2_path.replace("\\", "/")
+                        
+                    if p1_path:
+                        database.download_photo_from_github(p1_path)
+                    if p2_path:
+                        database.download_photo_from_github(p2_path)
+                    if p1_path and os.path.exists(p1_path):
+                        st.image(p1_path, caption="설비사진 1", use_container_width=True)
+                    if p2_path and os.path.exists(p2_path):
+                        st.image(p2_path, caption="설비사진 2", use_container_width=True)
                 
                 # 점검/수리 등록 폼
                 form_title = "➕ 점검 기록 등록"
@@ -1315,18 +1335,25 @@ else:
                                 """)
                                 
                                 # 사진 첨부 확인 및 배치
-                                if item['사진1']:
-                                    database.download_photo_from_github(item['사진1'])
-                                if item['사진2']:
-                                    database.download_photo_from_github(item['사진2'])
-                                if (item['사진1'] and os.path.exists(item['사진1'])) or (item['사진2'] and os.path.exists(item['사진2'])):
+                                h_pic1 = item['사진1']
+                                h_pic2 = item['사진2']
+                                if h_pic1 and isinstance(h_pic1, str):
+                                    h_pic1 = h_pic1.replace("\\", "/")
+                                if h_pic2 and isinstance(h_pic2, str):
+                                    h_pic2 = h_pic2.replace("\\", "/")
+                                    
+                                if h_pic1:
+                                    database.download_photo_from_github(h_pic1)
+                                if h_pic2:
+                                    database.download_photo_from_github(h_pic2)
+                                if (h_pic1 and os.path.exists(h_pic1)) or (h_pic2 and os.path.exists(h_pic2)):
                                     col_pic1, col_pic2 = st.columns(2)
-                                    if item['사진1'] and os.path.exists(item['사진1']):
+                                    if h_pic1 and os.path.exists(h_pic1):
                                         with col_pic1:
-                                            st.image(item['사진1'], caption="조치 사진1", use_container_width=True)
-                                    if item['사진2'] and os.path.exists(item['사진2']):
+                                            st.image(h_pic1, caption="조치 사진1", use_container_width=True)
+                                    if h_pic2 and os.path.exists(h_pic2):
                                         with col_pic2:
-                                            st.image(item['사진2'], caption="조치 사진2", use_container_width=True)
+                                            st.image(h_pic2, caption="조치 사진2", use_container_width=True)
                                             
                                 # 내역 하단에 수정 가능한 입력폼 바로 제공 (수정하기 버튼 삭제)
                                 st.markdown("---")
