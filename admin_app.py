@@ -193,25 +193,6 @@ class AdminMainWindow(QMainWindow):
         sync_bar = QHBoxLayout()
         sync_bar.setSpacing(10)
         
-        sync_bar.addWidget(QLabel("🔑 GitHub Access Token:"))
-        self.github_token_input = QLineEdit()
-        self.github_token_input.setEchoMode(QLineEdit.Password)
-        self.github_token_input.setPlaceholderText("ghp_...")
-        self.github_token_input.setFixedWidth(180)
-        sync_bar.addWidget(self.github_token_input)
-        
-        sync_bar.addWidget(QLabel("📦 Repository:"))
-        self.github_repo_input = QLineEdit()
-        self.github_repo_input.setPlaceholderText("owner/repo")
-        self.github_repo_input.setFixedWidth(150)
-        sync_bar.addWidget(self.github_repo_input)
-        
-        sync_bar.addWidget(QLabel("🌿 Branch:"))
-        self.github_branch_input = QLineEdit()
-        self.github_branch_input.setPlaceholderText("main")
-        self.github_branch_input.setFixedWidth(80)
-        sync_bar.addWidget(self.github_branch_input)
-        
         self.btn_db_pull = QPushButton("📥 DB 불러오기 (Pull)")
         self.btn_db_pull.clicked.connect(self.pull_db_action)
         sync_bar.addWidget(self.btn_db_pull)
@@ -1108,51 +1089,37 @@ class AdminMainWindow(QMainWindow):
         # 기본 하드코딩 설정값 정의 (GitHub 보안 감지 우회를 위해 분할)
         p1 = "ghp_EMIi33Uv"
         p2 = "mQKxmBcp65IeoXjYY2PhRB1mEqy0"
-        default_token = p1 + p2
-        default_repo = "lamsh2483-ui/castech_app"
-        default_branch = "main"
+        self.github_token = p1 + p2
+        self.github_repo = "lamsh2483-ui/castech_app"
+        self.github_branch = "main"
         
-        # UI 입력창에 기본값 세팅
-        self.github_token_input.setText(default_token)
-        self.github_repo_input.setText(default_repo)
-        self.github_branch_input.setText(default_branch)
-        
-        # 만약 로컬 설정 파일이 존재하면 설정 파일 값으로 덮어씀
+        # 만약 로컬 설정 파일이 존재하면 설정 파일 값으로 덮어씀 (소스코드 수정 없이 변동 가능하도록)
         if os.path.exists(CONFIG_FILE):
             try:
                 with open(CONFIG_FILE, "r", encoding="utf-8") as f:
                     config = json.load(f)
                     if config.get("token"):
-                        self.github_token_input.setText(config.get("token"))
+                        self.github_token = config.get("token")
                     if config.get("repository"):
-                        self.github_repo_input.setText(config.get("repository"))
+                        self.github_repo = config.get("repository")
                     if config.get("branch"):
-                        self.github_branch_input.setText(config.get("branch"))
+                        self.github_branch = config.get("branch")
             except Exception as e:
                 print(f"Error loading config: {e}")
 
     def save_github_config(self):
-        config = {
-            "token": self.github_token_input.text().strip(),
-            "repository": self.github_repo_input.text().strip(),
-            "branch": self.github_branch_input.text().strip()
-        }
-        try:
-            with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-                json.dump(config, f, indent=4, ensure_ascii=False)
-        except Exception as e:
-            print(f"Error saving config: {e}")
+        # UI 입력창이 제거되었으므로 저장 로직은 건너뜁니다.
+        pass
 
     def pull_db_action(self):
-        token = self.github_token_input.text().strip()
-        repo = self.github_repo_input.text().strip()
-        branch = self.github_branch_input.text().strip()
+        token = self.github_token
+        repo = self.github_repo
+        branch = self.github_branch
         
         if not token or not repo or not branch:
-            QMessageBox.warning(self, "설정 미비", "GitHub 토큰, 레포지토리, 브랜치명을 모두 기입해 주세요.")
+            QMessageBox.warning(self, "설정 미비", "GitHub 토큰, 레포지토리, 브랜치 설정이 올바르지 않습니다.")
             return
             
-        self.save_github_config()
         self.btn_db_pull.setEnabled(False)
         self.btn_db_pull.setText("📥 다운로드 중...")
         QApplication.processEvents()
@@ -1187,15 +1154,14 @@ class AdminMainWindow(QMainWindow):
             self.btn_db_pull.setText("📥 DB 불러오기 (Pull)")
 
     def push_db_action(self):
-        token = self.github_token_input.text().strip()
-        repo = self.github_repo_input.text().strip()
-        branch = self.github_branch_input.text().strip()
+        token = self.github_token
+        repo = self.github_repo
+        branch = self.github_branch
         
         if not token or not repo or not branch:
-            QMessageBox.warning(self, "설정 미비", "GitHub 토큰, 레포지토리, 브랜치명을 모두 기입해 주세요.")
+            QMessageBox.warning(self, "설정 미비", "GitHub 토큰, 레포지토리, 브랜치 설정이 올바르지 않습니다.")
             return
             
-        self.save_github_config()
         self.btn_db_push.setEnabled(False)
         self.btn_db_push.setText("💾 동기화 중(Push)...")
         QApplication.processEvents()
