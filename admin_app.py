@@ -1079,6 +1079,7 @@ class AdminMainWindow(QMainWindow):
                 p1_dest = os.path.join(PHOTOS_DIR, f"{eq_id}_1.jpg")
                 try:
                     shutil.copyfile(self.add_photo1_path, p1_dest)
+                    database.upload_photo_to_github(p1_dest)
                 except Exception as e:
                     print(f"Error copying photo 1: {e}")
                     
@@ -1086,6 +1087,7 @@ class AdminMainWindow(QMainWindow):
                 p2_dest = os.path.join(PHOTOS_DIR, f"{eq_id}_2.jpg")
                 try:
                     shutil.copyfile(self.add_photo2_path, p2_dest)
+                    database.upload_photo_to_github(p2_dest)
                 except Exception as e:
                     print(f"Error copying photo 2: {e}")
                     
@@ -1239,6 +1241,7 @@ class AdminMainWindow(QMainWindow):
                 p1_dest = os.path.join(PHOTOS_DIR, f"{new_id}_1.jpg")
                 try:
                     shutil.copyfile(self.edit_photo1_path, p1_dest)
+                    database.upload_photo_to_github(p1_dest)
                 except Exception as e:
                     print(f"Error copying photo 1: {e}")
                     
@@ -1246,6 +1249,7 @@ class AdminMainWindow(QMainWindow):
                 p2_dest = os.path.join(PHOTOS_DIR, f"{new_id}_2.jpg")
                 try:
                     shutil.copyfile(self.edit_photo2_path, p2_dest)
+                    database.upload_photo_to_github(p2_dest)
                 except Exception as e:
                     print(f"Error copying photo 2: {e}")
             
@@ -1405,6 +1409,7 @@ class AdminMainWindow(QMainWindow):
                 p1_dest = os.path.join(PHOTOS_DIR, f"hist_{eq_id}_{timestamp}_1.jpg")
                 try:
                     shutil.copyfile(self.add_log_photo1_path, p1_dest)
+                    database.upload_photo_to_github(p1_dest)
                 except Exception as e:
                     print(f"Error copying photo 1: {e}")
                     
@@ -1412,6 +1417,7 @@ class AdminMainWindow(QMainWindow):
                 p2_dest = os.path.join(PHOTOS_DIR, f"hist_{eq_id}_{timestamp}_2.jpg")
                 try:
                     shutil.copyfile(self.add_log_photo2_path, p2_dest)
+                    database.upload_photo_to_github(p2_dest)
                 except Exception as e:
                     print(f"Error copying photo 2: {e}")
                     
@@ -1569,6 +1575,7 @@ class AdminMainWindow(QMainWindow):
                 p1_dest = os.path.join(PHOTOS_DIR, f"hist_{eq_id}_{timestamp}_1.jpg")
                 try:
                     shutil.copyfile(self.edit_log_photo1_path, p1_dest)
+                    database.upload_photo_to_github(p1_dest)
                 except Exception as e:
                     print(f"Error copying photo 1: {e}")
                     
@@ -1576,6 +1583,7 @@ class AdminMainWindow(QMainWindow):
                 p2_dest = os.path.join(PHOTOS_DIR, f"hist_{eq_id}_{timestamp}_2.jpg")
                 try:
                     shutil.copyfile(self.edit_log_photo2_path, p2_dest)
+                    database.upload_photo_to_github(p2_dest)
                 except Exception as e:
                     print(f"Error copying photo 2: {e}")
             
