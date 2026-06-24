@@ -236,8 +236,8 @@ class AdminMainWindow(QMainWindow):
         
         # 직원 목록 테이블
         self.workers_table = QTableWidget()
-        self.workers_table.setColumnCount(3)
-        self.workers_table.setHorizontalHeaderLabels(["작업자명", "권한", "등록일시"])
+        self.workers_table.setColumnCount(4)
+        self.workers_table.setHorizontalHeaderLabels(["작업자명", "권한", "등록일시", "비밀번호"])
         self.workers_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.workers_table.itemChanged.connect(self.on_worker_cell_edited)
         layout.addWidget(self.workers_table)
@@ -540,7 +540,7 @@ class AdminMainWindow(QMainWindow):
         try:
             conn = database.get_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT 작업자명, 권한, 등록일시 FROM 작업자 ORDER BY 등록일시 DESC")
+            cursor.execute("SELECT 작업자명, 권한, 등록일시, 비밀번호 FROM 작업자 ORDER BY 등록일시 DESC")
             rows = cursor.fetchall()
             conn.close()
             
@@ -759,6 +759,12 @@ class AdminMainWindow(QMainWindow):
                 item.setData(Qt.UserRole, new_val)
             elif col == 1:  # 권한 변경 시
                 cursor.execute("UPDATE 작업자 SET 권한 = ? WHERE 작업자명 = ?", (new_val, self.workers_table.item(row, 0).text()))
+            elif col == 3:  # 비밀번호 변경 시
+                if not new_val:
+                    QMessageBox.warning(self, "오류", "비밀번호는 필수 항목입니다.")
+                    self.load_workers_table()
+                    return
+                cursor.execute("UPDATE 작업자 SET 비밀번호 = ? WHERE 작업자명 = ?", (new_val, self.workers_table.item(row, 0).text()))
                 
             conn.commit()
             # 수정 성공 후 원격 DB로 적용
@@ -881,6 +887,10 @@ class AdminMainWindow(QMainWindow):
         role_combo.addItems(["작업자", "관리자", "기술팀장"])
         form.addRow("권한 등급:", role_combo)
         
+        pw_input = QLineEdit()
+        pw_input.setText("1234")
+        form.addRow("비밀번호:", pw_input)
+        
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
         button_box.accepted.connect(dialog.accept)
         button_box.rejected.connect(dialog.reject)
@@ -889,9 +899,12 @@ class AdminMainWindow(QMainWindow):
         if dialog.exec() == QDialog.Accepted:
             name = name_input.text().strip()
             role = role_combo.currentText()
+            pw = pw_input.text().strip()
             if not name:
                 QMessageBox.warning(self, "오류", "작업자명을 입력해야 합니다.")
                 return
+            if not pw:
+                pw = "1234"
                 
             # 작업 시작 전 원격 DB에서 최신 데이터 가져옴
             database.sync_pull_from_github()
@@ -900,7 +913,7 @@ class AdminMainWindow(QMainWindow):
             cursor = conn.cursor()
             try:
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                cursor.execute("INSERT INTO 작업자 (작업자명, 권한, 등록일시) VALUES (?, ?, ?)", (name, role, now_str))
+                cursor.execute("INSERT INTO 작업자 (작업자명, 권한, 등록일시, 비밀번호) VALUES (?, ?, ?, ?)", (name, role, now_str, pw))
                 conn.commit()
                 # 성공 후 원격 DB에 적용
                 database.sync_push_to_github()
