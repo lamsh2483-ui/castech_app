@@ -894,10 +894,12 @@ else:
                                 p1_path = os.path.join(PHOTOS_DIR, f"{new_id}_1.jpg")
                                 with open(p1_path, "wb") as f:
                                     f.write(photo1.getbuffer())
+                                database.upload_photo_to_github(p1_path)
                             if photo2:
                                 p2_path = os.path.join(PHOTOS_DIR, f"{new_id}_2.jpg")
                                 with open(p2_path, "wb") as f:
                                     f.write(photo2.getbuffer())
+                                database.upload_photo_to_github(p2_path)
                                     
                             eq_data = {
                                 "거래처명": st.session_state.selected_client,
@@ -945,11 +947,15 @@ else:
                         st.write("🖼️ **기존 설비 사진**")
                         col_pic1, col_pic2 = st.columns(2)
                         with col_pic1:
+                            if eq_data["설비사진1"]:
+                                database.download_photo_from_github(eq_data["설비사진1"])
                             if eq_data["설비사진1"] and os.path.exists(eq_data["설비사진1"]):
                                 st.image(eq_data["설비사진1"], caption="설비사진 1", use_container_width=True)
                             else:
                                 st.caption("등록된 사진 1 없음")
                         with col_pic2:
+                            if eq_data["설비사진2"]:
+                                database.download_photo_from_github(eq_data["설비사진2"])
                             if eq_data["설비사진2"] and os.path.exists(eq_data["설비사진2"]):
                                 st.image(eq_data["설비사진2"], caption="설비사진 2", use_container_width=True)
                             else:
@@ -970,10 +976,12 @@ else:
                                     p1_path = os.path.join(PHOTOS_DIR, f"{edit_id}_1.jpg")
                                     with open(p1_path, "wb") as f:
                                         f.write(edit_photo1.getbuffer())
+                                    database.upload_photo_to_github(p1_path)
                                 if edit_photo2:
                                     p2_path = os.path.join(PHOTOS_DIR, f"{edit_id}_2.jpg")
                                     with open(p2_path, "wb") as f:
                                         f.write(edit_photo2.getbuffer())
+                                    database.upload_photo_to_github(p2_path)
                                         
                                 updated_eq_data = {
                                     "거래처명": st.session_state.selected_client,
@@ -994,6 +1002,10 @@ else:
                                     st.success(msg)
                                     st.session_state.new_eq_form_open = False
                                     st.session_state.mgmt_sub_menu = None
+                                    st.session_state.selected_eq_id = edit_id.strip()
+                                    st.session_state.search_result_eq_id = edit_id.strip()
+                                    st.session_state.search_performed = True
+                                    st.session_state.search_query = ""
                                     sync_query_params()
                                     st.rerun()
                                 else:
@@ -1072,6 +1084,10 @@ else:
                         **[조치 및 수리내용]** {item['조치_및_수리내용'] or '-'}
                         """)
                         
+                        if item['사진1']:
+                            database.download_photo_from_github(item['사진1'])
+                        if item['사진2']:
+                            database.download_photo_from_github(item['사진2'])
                         if (item['사진1'] and os.path.exists(item['사진1'])) or (item['사진2'] and os.path.exists(item['사진2'])):
                             col_pic1, col_pic2 = st.columns(2)
                             if item['사진1'] and os.path.exists(item['사진1']):
@@ -1178,6 +1194,10 @@ else:
                     st.write(f"**로드셀:** {eq_detail['로드셀'] or '-'}")
                     
                     # 사진이 등록되어 있을 시 노출
+                    if eq_detail['설비사진1']:
+                        database.download_photo_from_github(eq_detail['설비사진1'])
+                    if eq_detail['설비사진2']:
+                        database.download_photo_from_github(eq_detail['설비사진2'])
                     if eq_detail['설비사진1'] and os.path.exists(eq_detail['설비사진1']):
                         st.image(eq_detail['설비사진1'], caption="설비사진 1", use_container_width=True)
                     if eq_detail['설비사진2'] and os.path.exists(eq_detail['설비사진2']):
@@ -1239,10 +1259,12 @@ else:
                                     hp1_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_1.jpg")
                                     with open(hp1_path, "wb") as f:
                                         f.write(hist_photo1.getbuffer())
+                                    database.upload_photo_to_github(hp1_path)
                                 if hist_photo2:
                                     hp2_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_2.jpg")
                                     with open(hp2_path, "wb") as f:
                                         f.write(hist_photo2.getbuffer())
+                                    database.upload_photo_to_github(hp2_path)
                                         
                                 hist_data = {
                                     "날짜_시간": input_date.strftime("%Y-%m-%d"),
@@ -1280,6 +1302,10 @@ else:
                                 """)
                                 
                                 # 사진 첨부 확인 및 배치
+                                if item['사진1']:
+                                    database.download_photo_from_github(item['사진1'])
+                                if item['사진2']:
+                                    database.download_photo_from_github(item['사진2'])
                                 if (item['사진1'] and os.path.exists(item['사진1'])) or (item['사진2'] and os.path.exists(item['사진2'])):
                                     col_pic1, col_pic2 = st.columns(2)
                                     if item['사진1'] and os.path.exists(item['사진1']):
@@ -1336,10 +1362,12 @@ else:
                                                 hp1_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_1.jpg")
                                                 with open(hp1_path, "wb") as f:
                                                     f.write(edit_photo1.getbuffer())
+                                                database.upload_photo_to_github(hp1_path)
                                             if edit_photo2:
                                                 hp2_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_2.jpg")
                                                 with open(hp2_path, "wb") as f:
                                                     f.write(edit_photo2.getbuffer())
+                                                database.upload_photo_to_github(hp2_path)
                                                     
                                             updated_data = {
                                                 "날짜_시간": edit_date.strftime("%Y-%m-%d"),
