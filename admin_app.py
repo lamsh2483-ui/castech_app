@@ -8,7 +8,7 @@ import urllib.request
 from datetime import datetime
 
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QFont, QIcon, QColor
+from PySide6.QtGui import QFont, QIcon, QColor, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QLineEdit, QPushButton, QTableWidget, QTableWidgetItem,
@@ -351,11 +351,12 @@ class AdminMainWindow(QMainWindow):
         self.eq_tab = QWidget()
         eq_layout = QVBoxLayout(self.eq_tab)
         self.eq_table = QTableWidget()
-        self.eq_table.setColumnCount(10)
+        self.eq_table.setColumnCount(11)
         self.eq_table.setHorizontalHeaderLabels([
             "거래처명", "설비 ID (PK)", "설비명", "설치위치", "계측기 IP",
-            "인디게이터", "로드셀", "형식", "설치년월", "작업"
+            "인디게이터", "로드셀", "형식", "설치년월", "설비사진 1", "설비사진 2"
         ])
+        self.eq_table.verticalHeader().setDefaultSectionSize(55) # 사진 표시를 위해 행 높이 조정
         self.eq_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.eq_table.itemChanged.connect(self.on_eq_cell_edited)
         eq_layout.addWidget(self.eq_table)
@@ -365,6 +366,11 @@ class AdminMainWindow(QMainWindow):
         self.btn_add_eq.setObjectName("action-btn")
         self.btn_add_eq.clicked.connect(self.add_eq_dialog)
         eq_btn_bar.addWidget(self.btn_add_eq)
+        
+        self.btn_edit_eq = QPushButton("✏️ 선택 계기 사양 수정")
+        self.btn_edit_eq.setObjectName("action-btn")
+        self.btn_edit_eq.clicked.connect(self.edit_eq_dialog)
+        eq_btn_bar.addWidget(self.btn_edit_eq)
         
         self.btn_delete_eq = QPushButton("❌ 선택 계기 사양 삭제")
         self.btn_delete_eq.setObjectName("delete-btn")
@@ -604,12 +610,28 @@ class AdminMainWindow(QMainWindow):
                         item.setData(Qt.UserRole, str(val))
                     self.eq_table.setItem(row_idx, col_idx, item)
                 
-                # 우측 셀에 사진 경로 혹은 유무 표시 (수정 불가)
-                pic_val = "O" if (eq.get("설비사진1") or eq.get("설비사진2")) else "X"
-                pic_item = QTableWidgetItem(pic_val)
-                pic_item.setFlags(pic_item.flags() & ~Qt.ItemIsEditable)
-                pic_item.setTextAlignment(Qt.AlignCenter)
-                self.eq_table.setItem(row_idx, len(cols), pic_item)
+                # 설비사진 1, 2 썸네일 표시
+                for p_idx, col_pic in enumerate(["설비사진1", "설비사진2"]):
+                    pic_path = eq.get(col_pic)
+                    col_target = len(cols) + p_idx # 9, 10번째 열
+                    
+                    if pic_path and os.path.exists(pic_path):
+                        label = QLabel()
+                        pixmap = QPixmap(pic_path)
+                        if not pixmap.isNull():
+                            # 썸네일 생성 및 QLabel 세팅
+                            scaled_pix = pixmap.scaled(60, 45, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                            label.setPixmap(scaled_pix)
+                            label.setAlignment(Qt.AlignCenter)
+                            self.eq_table.setCellWidget(row_idx, col_target, label)
+                        else:
+                            item = QTableWidgetItem("손상 이미지")
+                            item.setTextAlignment(Qt.AlignCenter)
+                            self.eq_table.setItem(row_idx, col_target, item)
+                    else:
+                        item = QTableWidgetItem("-")
+                        item.setTextAlignment(Qt.AlignCenter)
+                        self.eq_table.setItem(row_idx, col_target, item)
         except Exception as e:
             print(f"Error loading equipments table: {e}")
         finally:
@@ -923,6 +945,40 @@ class AdminMainWindow(QMainWindow):
         date_input.setPlaceholderText("예: 2026-06")
         form.addRow("설치년월:", date_input)
         
+        # 신규 등록 사진 경로 변수 및 UI
+        self.add_photo1_path = ""
+        self.add_photo2_path = ""
+        
+        # 사진 1 등록 영역
+        p1_layout = QHBoxLayout()
+        self.add_p1_label = QLabel("사진 1 없음")
+        p1_layout.addWidget(self.add_p1_label)
+        btn_p1 = QPushButton("📁 사진 1 선택...")
+        def choose_p1():
+            fname, _ = QFileDialog.getOpenFileName(dialog, "설비 사진 1 선택", "", "Images (*.png *.jpg *.jpeg)")
+            if fname:
+                self.add_photo1_path = fname
+                pix = QPixmap(fname).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.add_p1_label.setPixmap(pix)
+        btn_p1.clicked.connect(choose_p1)
+        p1_layout.addWidget(btn_p1)
+        form.addRow("설비 사진 1:", p1_layout)
+        
+        # 사진 2 등록 영역
+        p2_layout = QHBoxLayout()
+        self.add_p2_label = QLabel("사진 2 없음")
+        p2_layout.addWidget(self.add_p2_label)
+        btn_p2 = QPushButton("📁 사진 2 선택...")
+        def choose_p2():
+            fname, _ = QFileDialog.getOpenFileName(dialog, "설비 사진 2 선택", "", "Images (*.png *.jpg *.jpeg)")
+            if fname:
+                self.add_photo2_path = fname
+                pix = QPixmap(fname).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.add_p2_label.setPixmap(pix)
+        btn_p2.clicked.connect(choose_p2)
+        p2_layout.addWidget(btn_p2)
+        form.addRow("설비 사진 2:", p2_layout)
+        
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
         button_box.accepted.connect(dialog.accept)
         button_box.rejected.connect(dialog.reject)
@@ -937,6 +993,28 @@ class AdminMainWindow(QMainWindow):
                 QMessageBox.warning(self, "오류", "필수 입력 항목(거래처, ID, 설비명)을 기입해야 합니다.")
                 return
                 
+            # 사진 저장 처리
+            p1_dest = ""
+            p2_dest = ""
+            PHOTOS_DIR = "photos"
+            if not os.path.exists(PHOTOS_DIR):
+                os.makedirs(PHOTOS_DIR)
+                
+            import shutil
+            if self.add_photo1_path:
+                p1_dest = os.path.join(PHOTOS_DIR, f"{eq_id}_1.jpg")
+                try:
+                    shutil.copyfile(self.add_photo1_path, p1_dest)
+                except Exception as e:
+                    print(f"Error copying photo 1: {e}")
+                    
+            if self.add_photo2_path:
+                p2_dest = os.path.join(PHOTOS_DIR, f"{eq_id}_2.jpg")
+                try:
+                    shutil.copyfile(self.add_photo2_path, p2_dest)
+                except Exception as e:
+                    print(f"Error copying photo 2: {e}")
+                    
             eq_data = {
                 "거래처명": client,
                 "설비ID": eq_id,
@@ -947,11 +1025,170 @@ class AdminMainWindow(QMainWindow):
                 "로드셀": lc_input.text().strip(),
                 "형식": fmt_input.text().strip(),
                 "설치년월": date_input.text().strip(),
-                "설비사진1": "",
-                "설비사진2": ""
+                "설비사진1": p1_dest,
+                "설비사진2": p2_dest
             }
             
             ok, msg = database.add_equipment(eq_data)
+            if ok:
+                QMessageBox.information(self, "성공", msg)
+                self.load_all_data()
+            else:
+                QMessageBox.warning(self, "실패", msg)
+
+    def edit_eq_dialog(self):
+        curr_row = self.eq_table.currentRow()
+        if curr_row < 0:
+            QMessageBox.warning(self, "알림", "수정할 계기를 표에서 선택해 주세요.")
+            return
+            
+        eq_id = self.eq_table.item(curr_row, 1).data(Qt.UserRole)
+        
+        conn = database.get_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM 설비마스터 WHERE 설비ID = ?", (eq_id,))
+        eq_data = cursor.fetchone()
+        conn.close()
+        
+        if not eq_data:
+            QMessageBox.critical(self, "오류", "선택한 설비 데이터를 찾을 수 없습니다.")
+            return
+            
+        eq_data = dict(eq_data)
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("계기 사양 수정")
+        form = QFormLayout(dialog)
+        
+        client_combo = QComboBox()
+        clients = database.get_clients()
+        client_combo.addItems(clients)
+        client_combo.setCurrentText(eq_data["거래처명"])
+        form.addRow("거래처 선택 (필수):", client_combo)
+        
+        id_input = QLineEdit()
+        id_input.setText(eq_data["설비ID"])
+        form.addRow("설비 ID (필수):", id_input)
+        
+        name_input = QLineEdit()
+        name_input.setText(eq_data["설비명"])
+        form.addRow("설비명 (필수):", name_input)
+        
+        loc_input = QLineEdit()
+        loc_input.setText(eq_data["설치위치"] or "")
+        form.addRow("설치위치:", loc_input)
+        
+        ip_input = QLineEdit()
+        ip_input.setText(eq_data["계측기_IP"] or "")
+        form.addRow("계측기 IP:", ip_input)
+        
+        ind_input = QLineEdit()
+        ind_input.setText(eq_data["인디게이터"] or "")
+        form.addRow("인디게이터:", ind_input)
+        
+        lc_input = QLineEdit()
+        lc_input.setText(eq_data["로드셀"] or "")
+        form.addRow("로드셀:", lc_input)
+        
+        fmt_input = QLineEdit()
+        fmt_input.setText(eq_data["형식"] or "")
+        form.addRow("형식:", fmt_input)
+        
+        date_input = QLineEdit()
+        date_input.setText(eq_data["설치년월"] or "")
+        date_input.setPlaceholderText("예: 2026-06")
+        form.addRow("설치년월:", date_input)
+        
+        self.edit_photo1_path = eq_data["설비사진1"] or ""
+        self.edit_photo2_path = eq_data["설비사진2"] or ""
+        
+        # 사진 1 영역
+        p1_layout = QHBoxLayout()
+        self.p1_label = QLabel("사진 1 없음")
+        if self.edit_photo1_path and os.path.exists(self.edit_photo1_path):
+            pix = QPixmap(self.edit_photo1_path).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.p1_label.setPixmap(pix)
+        p1_layout.addWidget(self.p1_label)
+        btn_p1 = QPushButton("📁 사진 1 변경...")
+        def change_p1():
+            fname, _ = QFileDialog.getOpenFileName(dialog, "설비 사진 1 선택", "", "Images (*.png *.jpg *.jpeg)")
+            if fname:
+                self.edit_photo1_path = fname
+                pix = QPixmap(fname).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.p1_label.setPixmap(pix)
+        btn_p1.clicked.connect(change_p1)
+        p1_layout.addWidget(btn_p1)
+        form.addRow("설비 사진 1:", p1_layout)
+        
+        # 사진 2 영역
+        p2_layout = QHBoxLayout()
+        self.p2_label = QLabel("사진 2 없음")
+        if self.edit_photo2_path and os.path.exists(self.edit_photo2_path):
+            pix = QPixmap(self.edit_photo2_path).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.p2_label.setPixmap(pix)
+        p2_layout.addWidget(self.p2_label)
+        btn_p2 = QPushButton("📁 사진 2 변경...")
+        def change_p2():
+            fname, _ = QFileDialog.getOpenFileName(dialog, "설비 사진 2 선택", "", "Images (*.png *.jpg *.jpeg)")
+            if fname:
+                self.edit_photo2_path = fname
+                pix = QPixmap(fname).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.p2_label.setPixmap(pix)
+        btn_p2.clicked.connect(change_p2)
+        p2_layout.addWidget(btn_p2)
+        form.addRow("설비 사진 2:", p2_layout)
+        
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        form.addRow(button_box)
+        
+        if dialog.exec() == QDialog.Accepted:
+            client = client_combo.currentText()
+            new_id = id_input.text().strip()
+            name = name_input.text().strip()
+            
+            if not client or not new_id or not name:
+                QMessageBox.warning(self, "오류", "필수 입력 항목(거래처, ID, 설비명)을 기입해야 합니다.")
+                return
+                
+            p1_dest = eq_data["설비사진1"] or ""
+            p2_dest = eq_data["설비사진2"] or ""
+            PHOTOS_DIR = "photos"
+            if not os.path.exists(PHOTOS_DIR):
+                os.makedirs(PHOTOS_DIR)
+                
+            import shutil
+            if self.edit_photo1_path and self.edit_photo1_path != eq_data["설비사진1"]:
+                p1_dest = os.path.join(PHOTOS_DIR, f"{new_id}_1.jpg")
+                try:
+                    shutil.copyfile(self.edit_photo1_path, p1_dest)
+                except Exception as e:
+                    print(f"Error copying photo 1: {e}")
+                    
+            if self.edit_photo2_path and self.edit_photo2_path != eq_data["설비사진2"]:
+                p2_dest = os.path.join(PHOTOS_DIR, f"{new_id}_2.jpg")
+                try:
+                    shutil.copyfile(self.edit_photo2_path, p2_dest)
+                except Exception as e:
+                    print(f"Error copying photo 2: {e}")
+            
+            updated_eq_data = {
+                "거래처명": client,
+                "설비ID": new_id,
+                "설비명": name,
+                "설치위치": loc_input.text().strip(),
+                "계측기_IP": ip_input.text().strip(),
+                "인디게이터": ind_input.text().strip(),
+                "로드셀": lc_input.text().strip(),
+                "형식": fmt_input.text().strip(),
+                "설치년월": date_input.text().strip(),
+                "설비사진1": p1_dest,
+                "설비사진2": p2_dest
+            }
+            
+            ok, msg = database.update_equipment(eq_id, updated_eq_data)
             if ok:
                 QMessageBox.information(self, "성공", msg)
                 self.load_all_data()
