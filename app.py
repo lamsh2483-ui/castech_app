@@ -1306,3 +1306,21 @@ else:
                         st.info("이 계기에 등록된 과거 점검 이력이 없습니다.")
         else:
             st.info("💡 왼쪽 검색창에 계기 ID 또는 명칭의 일부를 입력하고 🔍 검색을 완료하시면 상세 정보와 점검 등록 양식이 나타납니다.")
+
+    # 화면 최하단에 실시간 동기화 자가 진단창 배치
+    st.markdown("---")
+    with st.expander("🛠️ 시스템 실시간 동기화 자가 진단 패널", expanded=False):
+        log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "error_log.txt")
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, "r", encoding="utf-8") as f:
+                    logs = f.readlines()
+                st.code("".join(logs[-15:]), language="text")
+                if st.button("🗑️ 진단 로그 비우기", key="btn_clear_log_sys"):
+                    os.remove(log_path)
+                    st.success("진단 로그가 초기화되었습니다.")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"로그 리딩 에러: {e}")
+        else:
+            st.info("동기화 에러 로그가 비어 있습니다. (정상적으로 연결 중이거나 에러 없음)")
