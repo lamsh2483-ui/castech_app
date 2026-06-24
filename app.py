@@ -704,30 +704,6 @@ if st.session_state.selected_client is None:
     </div>
     """.replace("st.session_state.login_worker", f"👤 <b>{st.session_state.login_worker}</b>"), unsafe_allow_html=True)
     
-    # ----------------------------------------------------
-    # 비밀번호 변경 익스팬더
-    # ----------------------------------------------------
-    with st.expander("👤 내 비밀번호 변경", expanded=False):
-        st.markdown(f"현재 로그인된 작업자: **{st.session_state.login_worker}**")
-        curr_pw = st.text_input("현재 비밀번호", type="password", key="chg_curr_pw")
-        new_pw = st.text_input("새 비밀번호", type="password", key="chg_new_pw")
-        confirm_pw = st.text_input("새 비밀번호 확인", type="password", key="chg_confirm_pw")
-        if st.button("💾 비밀번호 변경 실행", key="chg_pw_btn"):
-            if not curr_pw or not new_pw or not confirm_pw:
-                st.error("모든 항목을 입력해 주세요.")
-            elif new_pw != confirm_pw:
-                st.error("새 비밀번호와 확인이 일치하지 않습니다.")
-            else:
-                db_pw = database.get_worker_password(st.session_state.login_worker)
-                if curr_pw != db_pw:
-                    st.error("현재 비밀번호가 일치하지 않습니다.")
-                else:
-                    ok, msg = database.change_worker_password(st.session_state.login_worker, new_pw)
-                    if ok:
-                        st.success("비밀번호가 성공적으로 변경되었습니다!")
-                    else:
-                        st.error(msg)
-                        
     st.markdown('<div class="section-title">🏢 거래처 선택</div>', unsafe_allow_html=True)
     clients = database.get_clients()
     
@@ -793,6 +769,31 @@ if st.session_state.selected_client is None:
                                 st.error(msg)
                 else:
                     st.info("등록된 거래처가 없습니다.")
+                    
+    # ----------------------------------------------------
+    # 비밀번호 변경 익스팬더 (화면 제일 하단으로 배치)
+    # ----------------------------------------------------
+    st.markdown('<div style="height: 40px;"></div>', unsafe_allow_html=True)
+    with st.expander("👤 내 비밀번호 변경", expanded=False):
+        st.markdown(f"현재 로그인된 작업자: **{st.session_state.login_worker}**")
+        curr_pw = st.text_input("현재 비밀번호", type="password", key="chg_curr_pw")
+        new_pw = st.text_input("새 비밀번호", type="password", key="chg_new_pw")
+        confirm_pw = st.text_input("새 비밀번호 확인", type="password", key="chg_confirm_pw")
+        if st.button("💾 비밀번호 변경 실행", key="chg_pw_btn"):
+            if not curr_pw or not new_pw or not confirm_pw:
+                st.error("모든 항목을 입력해 주세요.")
+            elif new_pw != confirm_pw:
+                st.error("새 비밀번호와 확인이 일치하지 않습니다.")
+            else:
+                db_pw = database.get_worker_password(st.session_state.login_worker)
+                if curr_pw != db_pw:
+                    st.error("현재 비밀번호가 일치하지 않습니다.")
+                else:
+                    ok, msg = database.change_worker_password(st.session_state.login_worker, new_pw)
+                    if ok:
+                        st.success("비밀번호가 성공적으로 변경되었습니다!")
+                    else:
+                        st.error(msg)
 
 else:
     # ==========================================
