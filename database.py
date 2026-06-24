@@ -791,6 +791,38 @@ def download_photo_from_github(file_path):
     except Exception as e:
         return False
 
+def sync_local_photos_to_github():
+    """로컬 photos/ 폴더의 모든 사진들을 스캔하여 GitHub에 없는 사진들을 백그라운드로 업로드합니다."""
+    PHOTOS_DIR = "photos"
+    if not os.path.exists(PHOTOS_DIR):
+        return
+        
+    try:
+        token, repo, branch = get_github_config()
+        if not token or not repo:
+            return
+            
+        local_files = []
+        for root, dirs, files in os.walk(PHOTOS_DIR):
+            for file in files:
+                if file.lower().endswith(('.jpg', '.jpeg', '.png')):
+                    local_path = os.path.join(root, file)
+                    local_files.append(local_path)
+                    
+        if not local_files:
+            return
+            
+        print(f"Syncing local photos to GitHub... Found {len(local_files)} photos.")
+        for path in local_files:
+            normalized_path = path.replace("\\", "/")
+            # 깃허브에 존재하지 않는 경우에만 업로드
+            sha = get_github_file_sha(token, repo, branch, normalized_path)
+            if not sha:
+                print(f"Uploading missing photo: {normalized_path}")
+                upload_photo_to_github(path)
+    except Exception as e:
+        print(f"Error syncing local photos to GitHub: {e}")
+
 if __name__ == "__main__":
     # 스크립트 단독 실행 시 데이터베이스 초기화 테스트
     success, msg = init_db()
