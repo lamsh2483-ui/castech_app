@@ -13,14 +13,29 @@ EXCEL_FILE = os.path.join(BASE_DIR, "설비이력 및 점검마스터.xlsx")
 LOG_FILE = os.path.join(BASE_DIR, "error_log.txt")
 
 def log_sync_error(message, error_details=None):
-    """실시간 동기화 에러 발생 시 파일로 상세 내역을 남깁니다."""
+    """실시간 동기화 에러 발생 시 파일 및 메모리 세션에 상세 내역을 남깁니다."""
     try:
         from datetime import datetime
-        log_line = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}\n"
+        log_line = f"[{datetime.now().strftime('%H:%M:%S')}] {message}"
         if error_details:
-            log_line += f"Details: {error_details}\n"
-        with open(LOG_FILE, "a", encoding="utf-8") as f:
-            f.write(log_line)
+            log_line += f" (상세: {error_details})"
+            
+        # 1. 파일에 쓰기 시도
+        try:
+            with open(LOG_FILE, "a", encoding="utf-8") as f:
+                f.write(log_line + "\n")
+        except Exception:
+            pass
+            
+        # 2. 파일 쓰기가 막히는 클라우드 환경을 대비해 세션 메모리에 직접 누적
+        try:
+            import streamlit as st
+            if hasattr(st, "session_state"):
+                if "sync_logs" not in st.session_state:
+                    st.session_state.sync_logs = []
+                st.session_state.sync_logs.append(log_line)
+        except Exception:
+            pass
     except Exception:
         pass
 
