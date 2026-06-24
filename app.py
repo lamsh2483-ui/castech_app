@@ -508,6 +508,22 @@ def sync_query_params():
         if "menu" in st.query_params:
             del st.query_params["menu"]
 
+    # 4. 설비 ID 동기화 (새로고침 대응)
+    if st.session_state.get("selected_eq_id"):
+        if st.query_params.get("eq_id") != st.session_state.selected_eq_id:
+            st.query_params["eq_id"] = st.session_state.selected_eq_id
+    else:
+        if "eq_id" in st.query_params:
+            del st.query_params["eq_id"]
+
+    # 5. 검색어 동기화 (새로고침 대응)
+    if st.session_state.get("search_performed") and st.session_state.get("search_query"):
+        if st.query_params.get("q") != st.session_state.search_query:
+            st.query_params["q"] = st.session_state.search_query
+    else:
+        if "q" in st.query_params:
+            del st.query_params["q"]
+
 # 3. 세션 상태 초기화
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
@@ -551,6 +567,17 @@ if "client" in st.query_params and st.session_state.selected_client != st.query_
     st.session_state.search_query = ""
     st.session_state.last_search_query = ""
     st.session_state.search_performed = False
+
+# 1-2. URL 쿼리 파라미터 처리 (검색어 복구)
+if "q" in st.query_params:
+    st.session_state.search_query = st.query_params["q"]
+    st.session_state.last_search_query = st.query_params["q"]
+    st.session_state.search_performed = True
+
+# 1-3. URL 쿼리 파라미터 처리 (설비 ID 복구)
+if "eq_id" in st.query_params and st.session_state.selected_eq_id != st.query_params["eq_id"]:
+    st.session_state.selected_eq_id = st.query_params["eq_id"]
+    st.session_state.search_result_eq_id = st.query_params["eq_id"]
 
 if "menu" in st.query_params:
     if st.session_state.mgmt_sub_menu != st.query_params["menu"]:
