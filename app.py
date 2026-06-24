@@ -1065,15 +1065,15 @@ else:
                 # 점검/수리 등록 폼
                 form_title = "➕ 점검 기록 등록"
                 submit_label = "💾 점검 완료 등록"
-                pre_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                pre_date = datetime.today().date()
                 pre_worker = st.session_state.get("login_worker", "선택하세요")
                 
                 with st.expander(form_title, expanded=False):
                     # 점검 이력 작성 폼 (Key를 고정하여 깔끔하게 처리)
                     form_key = "new_inspection_form"
                     with st.form(form_key):
-                        # 1. 등록 시간: 현재 DateTime 기본 노출 및 수정 가능 (요구사항 반영)
-                        input_date = st.text_input("점검 일시 (YYYY-MM-DD HH:MM:SS)", value=pre_date)
+                        # 1. 등록 날짜: 달력으로 날짜만 입력받기
+                        input_date = st.date_input("점검 날짜", value=pre_date)
                         
                         # 2. 작업자명: selectbox 제공 (['선택하세요', 데이터베이스 내용]) + 직접 입력 지원
                         db_workers = database.get_workers()
@@ -1124,7 +1124,7 @@ else:
                                         f.write(hist_photo2.getbuffer())
                                         
                                 hist_data = {
-                                    "날짜_시간": input_date.strip(),
+                                    "날짜_시간": input_date.strftime("%Y-%m-%d"),
                                     "작업자명": final_worker,
                                     "거래처명": st.session_state.selected_client,
                                     "설비ID": st.session_state.selected_eq_id,
@@ -1172,7 +1172,11 @@ else:
                                 st.markdown("---")
                                 st.markdown("✏️ **이 점검 이력 수정하기**")
                                 with st.form(key=f"edit_form_{item['id']}"):
-                                    edit_date = st.text_input("점검 일시 (YYYY-MM-DD HH:MM:SS)", value=item['날짜_시간'] or "", key=f"ed_date_{item['id']}")
+                                    try:
+                                        parsed_date = datetime.strptime(item['날짜_시간'][:10], "%Y-%m-%d").date()
+                                    except Exception:
+                                        parsed_date = datetime.today().date()
+                                    edit_date = st.date_input("점검 날짜", value=parsed_date, key=f"ed_date_{item['id']}")
                                     
                                     db_workers = database.get_workers()
                                     worker_options = ["선택하세요"] + db_workers + ["직접 입력..."]
@@ -1217,7 +1221,7 @@ else:
                                                     f.write(edit_photo2.getbuffer())
                                                     
                                             updated_data = {
-                                                "날짜_시간": edit_date.strip(),
+                                                "날짜_시간": edit_date.strftime("%Y-%m-%d"),
                                                 "작업자명": final_worker,
                                                 "거래처명": st.session_state.selected_client,
                                                 "설비ID": st.session_state.selected_eq_id,
