@@ -579,6 +579,8 @@ if "last_search_query" not in st.session_state:
     st.session_state.last_search_query = ""
 if "search_performed" not in st.session_state:
     st.session_state.search_performed = False
+if "sync_logs" not in st.session_state:
+    st.session_state.sync_logs = []
 
 # 1-1. URL 쿼리 파라미터 처리 (HTML A 태그 클릭 대응 - 로그인 복구 기능 포함)
 if "worker" in st.query_params and not st.session_state.authenticated:
@@ -1310,17 +1312,53 @@ else:
     # 화면 최하단에 실시간 동기화 자가 진단창 배치
     st.markdown("---")
     with st.expander("🛠️ 시스템 실시간 동기화 자가 진단 패널", expanded=False):
+        all_logs = []
+        
+        # 1. 파일 로그 가져오기
         log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "error_log.txt")
         if os.path.exists(log_path):
             try:
                 with open(log_path, "r", encoding="utf-8") as f:
-                    logs = f.readlines()
-                st.code("".join(logs[-15:]), language="text")
-                if st.button("🗑️ 진단 로그 비우기", key="btn_clear_log_sys"):
-                    os.remove(log_path)
+                    all_logs.extend([line.strip() for line in f.readlines() if line.strip()])
+            except Exception:
+                pass
+                
+        # 2. 세션 메모리 로그 가져오기
+        if "sync_logs" in st.session_state and st.session_state.sync_logs:
+            all_logs.extend(st.session_state.sync_logs)
+            
+        if all_logs:
+            st.code("\n".join(all_logs[-20:]), language="text")
+            
+            col_log1, col_log2 = st.columns(2)
+            with col_log1:
+                if st.button("🗑️ 진단 로그 초기화", key="btn_clear_log_sys", use_container_width=True):
+                    if os.path.exists(log_path):
+                        try:
+                            os.remove(log_path)
+                        except Exception:
+                            pass
+                    st.session_state.sync_logs = []
                     st.success("진단 로그가 초기화되었습니다.")
                     st.rerun()
-            except Exception as e:
-                st.error(f"로그 리딩 에러: {e}")
+            with col_log2:
+                # 수동 동기화 테스트 버튼
+                if st.button("🔄 실시간 동기화 테스트 실행", key="btn_test_sync_manual", use_container_width=True):
+                    import database
+                    ok = database.sync_push_to_github()
+                    if ok:
+                        st.success("동기화 테스트 성공!")
+                    else:
+                        st.error("동기화 테스트 실패. 로그를 확인하세요.")
+                    st.rerun()
         else:
-            st.info("동기화 에러 로그가 비어 있습니다. (정상적으로 연결 중이거나 에러 없음)")
+            st.info("동기화 로그가 비어 있습니다. (정상 작동 중이거나 에러 없음)")
+            # 비어 있는 상태에서도 수동 동기화 테스트 버튼 제공
+            if st.button("🔄 실시간 동기화 테스트 실행", key="btn_test_sync_manual_empty", use_container_width=True):
+                import database
+                ok = database.sync_push_to_github()
+                if ok:
+                    st.success("동기화 테스트 성공!")
+                else:
+                    st.error("동기화 테스트 실패. 로그를 확인하세요.")
+                st.rerun()
