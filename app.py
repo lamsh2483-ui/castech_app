@@ -718,6 +718,10 @@ if st.session_state.selected_client is None:
                 col_idx = idx % 2
                 with cols[col_idx]:
                     if st.button(f"🏢 {client}", key=f"client_btn_{idx}", use_container_width=True):
+                        try:
+                            database.sync_pull_from_github()
+                        except Exception:
+                            pass
                         st.session_state.selected_client = client
                         st.session_state.selected_eq_id = None
                         st.session_state.search_filter_id = None
@@ -807,6 +811,10 @@ else:
     with col_top_btns[0]:
         st.markdown('<div class="top-row-marker" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;"></div>', unsafe_allow_html=True)
         if st.button("⬅️ 돌아가기", key="back_to_home_btn"):
+            try:
+                database.sync_pull_from_github()
+            except Exception:
+                pass
             if st.session_state.new_eq_form_open:
                 st.session_state.new_eq_form_open = False
                 st.session_state.mgmt_sub_menu = None
@@ -1140,6 +1148,10 @@ else:
                 confirm_search = st.button("🔍 검색", key="confirm_search_btn")
             
             if confirm_search:
+                try:
+                    database.sync_pull_from_github()
+                except Exception:
+                    pass
                 st.session_state.search_performed = True
                 st.session_state.search_query = search_query_stripped
                 st.session_state.last_search_query = search_query_stripped
