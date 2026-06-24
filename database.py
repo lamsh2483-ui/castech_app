@@ -45,22 +45,24 @@ def get_github_config():
     repo = None
     branch = "main"
     
-    # 1. Streamlit 환경 검사
-    try:
-        import streamlit as st
-        if hasattr(st, "secrets"):
-            if "github" in st.secrets:
-                token = st.secrets["github"].get("token")
-                repo = st.secrets["github"].get("repository")
-                branch = st.secrets["github"].get("branch", "main")
-                if not token or not repo:
-                    log_sync_error("Streamlit secrets 'github' 블록은 존재하나 'token' 또는 'repository'가 비어있습니다.")
+    # 1. Streamlit 환경 검사 (Streamlit 구동 시에만 st 임포트 및 secrets 조회 진행)
+    import sys
+    if "streamlit" in sys.modules or any("streamlit" in arg.lower() for arg in sys.argv):
+        try:
+            import streamlit as st
+            if hasattr(st, "secrets"):
+                if "github" in st.secrets:
+                    token = st.secrets["github"].get("token")
+                    repo = st.secrets["github"].get("repository")
+                    branch = st.secrets["github"].get("branch", "main")
+                    if not token or not repo:
+                        log_sync_error("Streamlit secrets 'github' 블록은 존재하나 'token' 또는 'repository'가 비어있습니다.")
+                else:
+                    log_sync_error("Streamlit secrets가 존재하지만 'github' 키를 찾을 수 없습니다.")
             else:
-                log_sync_error("Streamlit secrets가 존재하지만 'github' 키를 찾을 수 없습니다.")
-        else:
-            log_sync_error("Streamlit에 secrets 속성이 존재하지 않습니다.")
-    except Exception as e:
-        log_sync_error("Streamlit secrets 읽기 실패", str(e))
+                log_sync_error("Streamlit에 secrets 속성이 존재하지 않습니다.")
+        except Exception as e:
+            log_sync_error("Streamlit secrets 읽기 실패", str(e))
         
     # 2. 로컬 파일 검사
     if not token or not repo:
