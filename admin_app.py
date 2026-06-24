@@ -200,9 +200,9 @@ class AdminMainWindow(QMainWindow):
         # 2-1. 좌측 메뉴 탭 선택기 (QListWidget)
         self.nav_menu = QListWidget()
         self.nav_menu.addItems([
-            "👥 사용자 관리",
             "📊 데이터 통합 관리",
-            "🖨️ 보고서 생성 및 출력"
+            "🖨️ 보고서 생성 및 출력",
+            "👥 사용자 관리"
         ])
         self.nav_menu.setFixedWidth(200)
         self.nav_menu.currentRowChanged.connect(self.switch_tab)
@@ -213,9 +213,9 @@ class AdminMainWindow(QMainWindow):
         splitter.addWidget(self.main_stack)
         
         # 메인 스택 하위 화면(탭) 생성
-        self.create_workers_tab()
         self.create_data_mgmt_tab()
         self.create_report_tab()
+        self.create_workers_tab()
         
         # 초기 탭 설정
         self.nav_menu.setCurrentRow(0)
