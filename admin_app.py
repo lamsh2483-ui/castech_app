@@ -41,6 +41,9 @@ class AdminMainWindow(QMainWindow):
         
         # 3. GitHub 설정 불러오기
         self.load_github_config()
+        
+        # 4. 시작 시 자동으로 DB 불러오기 (Pull)
+        self.auto_pull_db()
 
     def setup_styles(self):
         # Industrial Embedded Dark UI 스타일시트 정의
@@ -189,23 +192,7 @@ class AdminMainWindow(QMainWindow):
         main_layout.setContentsMargins(15, 15, 15, 15)
         main_layout.setSpacing(15)
         
-        # 1. 상단 GitHub 동기화 바 및 정보 설정 영역
-        sync_bar = QHBoxLayout()
-        sync_bar.setSpacing(10)
-        
-        self.btn_db_pull = QPushButton("📥 DB 불러오기 (Pull)")
-        self.btn_db_pull.clicked.connect(self.pull_db_action)
-        sync_bar.addWidget(self.btn_db_pull)
-        
-        self.btn_db_push = QPushButton("💾 최종 저장 및 동기화 (Push)")
-        self.btn_db_push.setObjectName("sync-btn")
-        self.btn_db_push.setStyleSheet("QPushButton#sync-btn { background-color: #2e7d32; color: #ffffff; border-color: #4caf50; } QPushButton#sync-btn:hover { background-color: #388e3c; }")
-        self.btn_db_push.clicked.connect(self.push_db_action)
-        sync_bar.addWidget(self.btn_db_push)
-        
-        sync_bar.addStretch()
-        main_layout.addLayout(sync_bar)
-        
+
         # 2. 좌/우 2분할 스플리터 레이아웃
         splitter = QSplitter(Qt.Horizontal)
         main_layout.addWidget(splitter)
@@ -391,12 +378,19 @@ class AdminMainWindow(QMainWindow):
         self.logs_tab = QWidget()
         logs_layout = QVBoxLayout(self.logs_tab)
         self.logs_table = QTableWidget()
-        self.logs_table.setColumnCount(9)
+        self.logs_table.setColumnCount(10)
         self.logs_table.setHorizontalHeaderLabels([
             "ID (PK)", "점검일시", "작업자명", "거래처명", "설비 ID",
-            "증상 및 상태", "조치 및 수리내용", "수리비용(원)", "작업"
+            "증상 및 상태", "조치 및 수리내용", "수리비용(원)", "사진 1", "사진 2"
         ])
+        self.logs_table.verticalHeader().setDefaultSectionSize(55) # 사진 표시를 위해 행 높이 조정
         self.logs_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        
+        # 더블클릭/클릭 시 수정 안 되고 행만 선택되도록 설정
+        self.logs_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.logs_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.logs_table.setSelectionMode(QTableWidget.SingleSelection)
+        
         self.logs_table.itemChanged.connect(self.on_log_cell_edited)
         logs_layout.addWidget(self.logs_table)
         
@@ -405,6 +399,11 @@ class AdminMainWindow(QMainWindow):
         self.btn_add_log.setObjectName("action-btn")
         self.btn_add_log.clicked.connect(self.add_log_dialog)
         logs_btn_bar.addWidget(self.btn_add_log)
+        
+        self.btn_edit_log = QPushButton("✏️ 선택 점검 이력 수정")
+        self.btn_edit_log.setObjectName("action-btn")
+        self.btn_edit_log.clicked.connect(self.edit_log_dialog)
+        logs_btn_bar.addWidget(self.btn_edit_log)
         
         self.btn_delete_log = QPushButton("❌ 선택 점검 이력 삭제")
         self.btn_delete_log.setObjectName("delete-btn")
@@ -699,12 +698,27 @@ class AdminMainWindow(QMainWindow):
                         item.setTextAlignment(Qt.AlignCenter)
                     self.logs_table.setItem(visible_row, col_idx, item)
                     
-                # 이미지 유무 표시 (수정 불가)
-                pic_val = "O" if (eq.get("사진1") or eq.get("사진2")) else "X"
-                pic_item = QTableWidgetItem(pic_val)
-                pic_item.setFlags(pic_item.flags() & ~Qt.ItemIsEditable)
-                pic_item.setTextAlignment(Qt.AlignCenter)
-                self.logs_table.setItem(visible_row, len(cols), pic_item)
+                # 사진 1, 2 썸네일 표시
+                for p_idx, col_pic in enumerate(["사진1", "사진2"]):
+                    pic_path = eq.get(col_pic)
+                    col_target = len(cols) + p_idx # 8, 9번째 열
+                    
+                    if pic_path and os.path.exists(pic_path):
+                        label = QLabel()
+                        pixmap = QPixmap(pic_path)
+                        if not pixmap.isNull():
+                            scaled_pix = pixmap.scaled(60, 45, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                            label.setPixmap(scaled_pix)
+                            label.setAlignment(Qt.AlignCenter)
+                            self.logs_table.setCellWidget(visible_row, col_target, label)
+                        else:
+                            item = QTableWidgetItem("손상 이미지")
+                            item.setTextAlignment(Qt.AlignCenter)
+                            self.logs_table.setItem(visible_row, col_target, item)
+                    else:
+                        item = QTableWidgetItem("-")
+                        item.setTextAlignment(Qt.AlignCenter)
+                        self.logs_table.setItem(visible_row, col_target, item)
                 
                 visible_row += 1
         except Exception as e:
@@ -720,6 +734,9 @@ class AdminMainWindow(QMainWindow):
         row = item.row()
         col = item.column()
         new_val = item.text().strip()
+        
+        # 수정 시작 전 원격 DB에서 최신 데이터 가져옴
+        database.sync_pull_from_github()
         
         conn = database.get_connection()
         cursor = conn.cursor()
@@ -738,6 +755,8 @@ class AdminMainWindow(QMainWindow):
                 cursor.execute("UPDATE 작업자 SET 권한 = ? WHERE 작업자명 = ?", (new_val, self.workers_table.item(row, 0).text()))
                 
             conn.commit()
+            # 수정 성공 후 원격 DB로 적용
+            database.sync_push_to_github()
         except Exception as e:
             QMessageBox.critical(self, "데이터베이스 오류", f"수정에 실패했습니다: {e}")
             self.load_workers_table()
@@ -767,6 +786,9 @@ class AdminMainWindow(QMainWindow):
         col = item.column()
         new_val = item.text().strip()
         
+        # 수정 시작 전 원격 DB에서 최신 데이터 가져옴
+        database.sync_pull_from_github()
+        
         # 설비 ID 열에서 원래 ID 가져오기
         original_eq_id = self.eq_table.item(row, 1).data(Qt.UserRole)
         cols = ["거래처명", "설비ID", "설비명", "설치위치", "계측기_IP", "인디게이터", "로드셀", "형식", "설치년월"]
@@ -789,6 +811,8 @@ class AdminMainWindow(QMainWindow):
                 cursor.execute(f"UPDATE 설비마스터 SET {col_name} = ? WHERE 설비ID = ?", (new_val, original_eq_id))
                 
             conn.commit()
+            # 수정 성공 후 원격 DB로 적용
+            database.sync_push_to_github()
         except Exception as e:
             QMessageBox.critical(self, "데이터베이스 오류", f"수정에 실패했습니다: {e}")
             self.load_equipments_table()
@@ -799,6 +823,9 @@ class AdminMainWindow(QMainWindow):
         row = item.row()
         col = item.column()
         new_val = item.text().strip()
+        
+        # 수정 시작 전 원격 DB에서 최신 데이터 가져옴
+        database.sync_pull_from_github()
         
         log_id = self.logs_table.item(row, 0).text()
         cols = ["id", "날짜_시간", "작업자명", "거래처명", "설비ID", "증상상태", "조치_및_수리내용", "금액"]
@@ -816,6 +843,8 @@ class AdminMainWindow(QMainWindow):
             
             cursor.execute(f"UPDATE 점검이력 SET {col_name} = ? WHERE id = ?", (new_val, log_id))
             conn.commit()
+            # 수정 성공 후 원격 DB로 적용
+            database.sync_push_to_github()
         except Exception as e:
             QMessageBox.critical(self, "데이터베이스 오류", f"수정에 실패했습니다: {e}")
             self.load_logs_table()
@@ -849,12 +878,17 @@ class AdminMainWindow(QMainWindow):
                 QMessageBox.warning(self, "오류", "작업자명을 입력해야 합니다.")
                 return
                 
+            # 작업 시작 전 원격 DB에서 최신 데이터 가져옴
+            database.sync_pull_from_github()
+            
             conn = database.get_connection()
             cursor = conn.cursor()
             try:
                 now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 cursor.execute("INSERT INTO 작업자 (작업자명, 권한, 등록일시) VALUES (?, ?, ?)", (name, role, now_str))
                 conn.commit()
+                # 성공 후 원격 DB에 적용
+                database.sync_push_to_github()
                 self.load_workers_table()
             except sqlite3.IntegrityError:
                 QMessageBox.warning(self, "오류", "이미 등록된 작업자명입니다.")
@@ -873,11 +907,16 @@ class AdminMainWindow(QMainWindow):
         confirm = QMessageBox.question(self, "삭제 확인", f"작업자 '{name}'을(를) 삭제하시겠습니까?\n이 이력은 복구되지 않습니다.", QMessageBox.Yes | QMessageBox.No)
         
         if confirm == QMessageBox.Yes:
+            # 작업 시작 전 원격 DB에서 최신 데이터 가져옴
+            database.sync_pull_from_github()
+            
             conn = database.get_connection()
             cursor = conn.cursor()
             try:
                 cursor.execute("DELETE FROM 작업자 WHERE 작업자명 = ?", (name,))
                 conn.commit()
+                # 성공 후 원격 DB에 적용
+                database.sync_push_to_github()
                 self.load_workers_table()
             except Exception as e:
                 QMessageBox.critical(self, "오류", f"삭제 실패: {e}")
@@ -1211,26 +1250,30 @@ class AdminMainWindow(QMainWindow):
             
         eq_id = self.eq_table.item(curr_row, 1).text()
         confirm = QMessageBox.question(self, "삭제 확인", f"계기 ID '{eq_id}' 사양을 삭제하시겠습니까?\n이 이력은 복구되지 않습니다.", QMessageBox.Yes | QMessageBox.No)
-        
         if confirm == QMessageBox.Yes:
+            # 작업 시작 전 원격 DB에서 최신 데이터 가져옴
+            database.sync_pull_from_github()
+            
             conn = database.get_connection()
             cursor = conn.cursor()
             try:
                 cursor.execute("DELETE FROM 설비마스터 WHERE 설비ID = ?", (eq_id,))
                 cursor.execute("DELETE FROM 점검이력 WHERE 설비ID = ?", (eq_id,))
                 conn.commit()
+                # 성공 후 원격 DB에 적용
+                database.sync_push_to_github()
                 self.load_all_data()
             except Exception as e:
                 QMessageBox.critical(self, "오류", f"삭제 실패: {e}")
             finally:
                 conn.close()
-
     # =========================================================================
     # 점검 이력 수동 등록 / 삭제 다이얼로그
     # =========================================================================
     def add_log_dialog(self):
         dialog = QDialog(self)
         dialog.setWindowTitle("점검 이력 수동 입력")
+        dialog.resize(800, 600)
         form = QFormLayout(dialog)
         
         clients = database.get_clients()
@@ -1268,6 +1311,40 @@ class AdminMainWindow(QMainWindow):
         cost_input.setText("0")
         form.addRow("수리 비용(원):", cost_input)
         
+        # 신규 등록 점검 사진 경로 변수 및 UI
+        self.add_log_photo1_path = ""
+        self.add_log_photo2_path = ""
+        
+        # 사진 1 등록 영역
+        p1_layout = QHBoxLayout()
+        self.add_log_p1_label = QLabel("사진 1 없음")
+        p1_layout.addWidget(self.add_log_p1_label)
+        btn_p1 = QPushButton("📁 사진 1 선택...")
+        def choose_p1():
+            fname, _ = QFileDialog.getOpenFileName(dialog, "점검 사진 1 선택", "", "Images (*.png *.jpg *.jpeg)")
+            if fname:
+                self.add_log_photo1_path = fname
+                pix = QPixmap(fname).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.add_log_p1_label.setPixmap(pix)
+        btn_p1.clicked.connect(choose_p1)
+        p1_layout.addWidget(btn_p1)
+        form.addRow("점검 사진 1:", p1_layout)
+        
+        # 사진 2 등록 영역
+        p2_layout = QHBoxLayout()
+        self.add_log_p2_label = QLabel("사진 2 없음")
+        p2_layout.addWidget(self.add_log_p2_label)
+        btn_p2 = QPushButton("📁 사진 2 선택...")
+        def choose_p2():
+            fname, _ = QFileDialog.getOpenFileName(dialog, "점검 사진 2 선택", "", "Images (*.png *.jpg *.jpeg)")
+            if fname:
+                self.add_log_photo2_path = fname
+                pix = QPixmap(fname).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.add_log_p2_label.setPixmap(pix)
+        btn_p2.clicked.connect(choose_p2)
+        p2_layout.addWidget(btn_p2)
+        form.addRow("점검 사진 2:", p2_layout)
+        
         button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
         button_box.accepted.connect(dialog.accept)
         button_box.rejected.connect(dialog.reject)
@@ -1287,6 +1364,29 @@ class AdminMainWindow(QMainWindow):
             except ValueError:
                 cost = 0.0
                 
+            # 사진 저장 처리
+            p1_dest = ""
+            p2_dest = ""
+            PHOTOS_DIR = "photos"
+            if not os.path.exists(PHOTOS_DIR):
+                os.makedirs(PHOTOS_DIR)
+                
+            import shutil
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            if self.add_log_photo1_path:
+                p1_dest = os.path.join(PHOTOS_DIR, f"hist_{eq_id}_{timestamp}_1.jpg")
+                try:
+                    shutil.copyfile(self.add_log_photo1_path, p1_dest)
+                except Exception as e:
+                    print(f"Error copying photo 1: {e}")
+                    
+            if self.add_log_photo2_path:
+                p2_dest = os.path.join(PHOTOS_DIR, f"hist_{eq_id}_{timestamp}_2.jpg")
+                try:
+                    shutil.copyfile(self.add_log_photo2_path, p2_dest)
+                except Exception as e:
+                    print(f"Error copying photo 2: {e}")
+                    
             history_data = {
                 "날짜_시간": date_input.text().strip(),
                 "작업자명": worker,
@@ -1294,12 +1394,176 @@ class AdminMainWindow(QMainWindow):
                 "설비ID": eq_id,
                 "증상상태": symptom_input.text().strip(),
                 "조치_및_수리내용": action_input.text().strip(),
-                "사진1": "",
-                "사진2": "",
+                "사진1": p1_dest,
+                "사진2": p2_dest,
                 "금액": cost
             }
             
             ok, msg = database.add_history(history_data)
+            if ok:
+                QMessageBox.information(self, "성공", msg)
+                self.load_all_data()
+            else:
+                QMessageBox.warning(self, "실패", msg)
+
+    def edit_log_dialog(self):
+        curr_row = self.logs_table.currentRow()
+        if curr_row < 0:
+            QMessageBox.warning(self, "알림", "수정할 점검 이력을 표에서 선택해 주세요.")
+            return
+            
+        log_id = self.logs_table.item(curr_row, 0).text()
+        
+        conn = database.get_connection()
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM 점검이력 WHERE id = ?", (log_id,))
+        log_data = cursor.fetchone()
+        conn.close()
+        
+        if not log_data:
+            QMessageBox.critical(self, "오류", "선택한 점검 이력을 찾을 수 없습니다.")
+            return
+            
+        log_data = dict(log_data)
+        
+        dialog = QDialog(self)
+        dialog.setWindowTitle("점검 이력 수정")
+        dialog.resize(800, 600)
+        form = QFormLayout(dialog)
+        
+        clients = database.get_clients()
+        client_combo = QComboBox()
+        client_combo.addItems(clients)
+        client_combo.setCurrentText(log_data["거래처명"])
+        form.addRow("거래처 선택:", client_combo)
+        
+        eq_combo = QComboBox()
+        def on_client_changed(client_name):
+            eq_combo.clear()
+            eqs = database.get_equipments(client_name)
+            eq_combo.addItems([eq["설비ID"] for eq in eqs])
+            if client_name == log_data["거래처명"]:
+                eq_combo.setCurrentText(log_data["설비ID"])
+        
+        client_combo.currentTextChanged.connect(on_client_changed)
+        on_client_changed(log_data["거래처명"])
+        form.addRow("설비 ID 선택:", eq_combo)
+        
+        worker_combo = QComboBox()
+        worker_combo.addItems(database.get_workers())
+        worker_combo.setCurrentText(log_data["작업자명"])
+        form.addRow("작업자 선택:", worker_combo)
+        
+        date_input = QLineEdit()
+        date_input.setText(log_data["날짜_시간"])
+        form.addRow("점검 일시:", date_input)
+        
+        symptom_input = QLineEdit()
+        symptom_input.setText(log_data["증상상태"] or "")
+        form.addRow("증상상태:", symptom_input)
+        
+        action_input = QLineEdit()
+        action_input.setText(log_data["조치_및_수리내용"] or "")
+        form.addRow("조치 및 수리내용:", action_input)
+        
+        cost_input = QLineEdit()
+        cost_input.setText(str(int(log_data["금액"]) if log_data["금액"] is not None else 0))
+        form.addRow("수리 비용(원):", cost_input)
+        
+        self.edit_log_photo1_path = log_data["사진1"] or ""
+        self.edit_log_photo2_path = log_data["사진2"] or ""
+        
+        # 사진 1 영역
+        p1_layout = QHBoxLayout()
+        self.log_p1_label = QLabel("사진 1 없음")
+        if self.edit_log_photo1_path and os.path.exists(self.edit_log_photo1_path):
+            pix = QPixmap(self.edit_log_photo1_path).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.log_p1_label.setPixmap(pix)
+        p1_layout.addWidget(self.log_p1_label)
+        btn_p1 = QPushButton("📁 사진 1 변경...")
+        def change_p1():
+            fname, _ = QFileDialog.getOpenFileName(dialog, "점검 사진 1 선택", "", "Images (*.png *.jpg *.jpeg)")
+            if fname:
+                self.edit_log_photo1_path = fname
+                pix = QPixmap(fname).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.log_p1_label.setPixmap(pix)
+        btn_p1.clicked.connect(change_p1)
+        p1_layout.addWidget(btn_p1)
+        form.addRow("점검 사진 1:", p1_layout)
+        
+        # 사진 2 영역
+        p2_layout = QHBoxLayout()
+        self.log_p2_label = QLabel("사진 2 없음")
+        if self.edit_log_photo2_path and os.path.exists(self.edit_log_photo2_path):
+            pix = QPixmap(self.edit_log_photo2_path).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            self.log_p2_label.setPixmap(pix)
+        p2_layout.addWidget(self.log_p2_label)
+        btn_p2 = QPushButton("📁 사진 2 변경...")
+        def change_p2():
+            fname, _ = QFileDialog.getOpenFileName(dialog, "점검 사진 2 선택", "", "Images (*.png *.jpg *.jpeg)")
+            if fname:
+                self.edit_log_photo2_path = fname
+                pix = QPixmap(fname).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.log_p2_label.setPixmap(pix)
+        btn_p2.clicked.connect(change_p2)
+        p2_layout.addWidget(btn_p2)
+        form.addRow("점검 사진 2:", p2_layout)
+        
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel, dialog)
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        form.addRow(button_box)
+        
+        if dialog.exec() == QDialog.Accepted:
+            client = client_combo.currentText()
+            eq_id = eq_combo.currentText()
+            worker = worker_combo.currentText()
+            
+            if not client or not eq_id:
+                QMessageBox.warning(self, "오류", "거래처와 계기 ID를 선택해 주세요.")
+                return
+                
+            try:
+                cost = float(cost_input.text().strip())
+            except ValueError:
+                cost = 0.0
+                
+            p1_dest = log_data["사진1"] or ""
+            p2_dest = log_data["사진2"] or ""
+            PHOTOS_DIR = "photos"
+            if not os.path.exists(PHOTOS_DIR):
+                os.makedirs(PHOTOS_DIR)
+                
+            import shutil
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            if self.edit_log_photo1_path and self.edit_log_photo1_path != log_data["사진1"]:
+                p1_dest = os.path.join(PHOTOS_DIR, f"hist_{eq_id}_{timestamp}_1.jpg")
+                try:
+                    shutil.copyfile(self.edit_log_photo1_path, p1_dest)
+                except Exception as e:
+                    print(f"Error copying photo 1: {e}")
+                    
+            if self.edit_log_photo2_path and self.edit_log_photo2_path != log_data["사진2"]:
+                p2_dest = os.path.join(PHOTOS_DIR, f"hist_{eq_id}_{timestamp}_2.jpg")
+                try:
+                    shutil.copyfile(self.edit_log_photo2_path, p2_dest)
+                except Exception as e:
+                    print(f"Error copying photo 2: {e}")
+            
+            updated_data = {
+                "날짜_시간": date_input.text().strip(),
+                "작업자명": worker,
+                "거래처명": client,
+                "설비ID": eq_id,
+                "증상상태": symptom_input.text().strip(),
+                "조치_및_수리내용": action_input.text().strip(),
+                "사진1": p1_dest,
+                "사진2": p2_dest,
+                "금액": cost
+            }
+            
+            ok, msg = database.update_history(log_id, updated_data)
             if ok:
                 QMessageBox.information(self, "성공", msg)
                 self.load_all_data()
@@ -1316,11 +1580,16 @@ class AdminMainWindow(QMainWindow):
         confirm = QMessageBox.question(self, "삭제 확인", f"점검 ID '{log_id}' 내역을 삭제하시겠습니까?\n이 이력은 복구되지 않습니다.", QMessageBox.Yes | QMessageBox.No)
         
         if confirm == QMessageBox.Yes:
+            # 작업 시작 전 원격 DB에서 최신 데이터 가져옴
+            database.sync_pull_from_github()
+            
             conn = database.get_connection()
             cursor = conn.cursor()
             try:
                 cursor.execute("DELETE FROM 점검이력 WHERE id = ?", (log_id,))
                 conn.commit()
+                # 성공 후 원격 DB에 적용
+                database.sync_push_to_github()
                 self.load_all_data()
             except Exception as e:
                 QMessageBox.critical(self, "오류", f"삭제 실패: {e}")
@@ -1356,114 +1625,15 @@ class AdminMainWindow(QMainWindow):
         # UI 입력창이 제거되었으므로 저장 로직은 건너뜁니다.
         pass
 
-    def pull_db_action(self):
-        token = self.github_token
-        repo = self.github_repo
-        branch = self.github_branch
-        
-        if not token or not repo or not branch:
-            QMessageBox.warning(self, "설정 미비", "GitHub 토큰, 레포지토리, 브랜치 설정이 올바르지 않습니다.")
-            return
-            
-        self.btn_db_pull.setEnabled(False)
-        self.btn_db_pull.setText("📥 다운로드 중...")
-        QApplication.processEvents()
-        
-        # GitHub API GET /repos/{owner}/{repo}/contents/castech.db
-        url = f"https://api.github.com/repos/{repo}/contents/castech.db?ref={branch}"
-        req = urllib.request.Request(url)
-        req.add_header("Authorization", f"token {token}")
-        req.add_header("Accept", "application/vnd.github.v3+json")
-        req.add_header("User-Agent", "CAS-TECH-Admin-App")
-        
-        try:
-            with urllib.request.urlopen(req) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                file_content = base64.b64decode(data["content"])
-                
-                # 기존 로컬 DB를 안전하게 덮어쓰기 위해 백업 후 저장
-                if os.path.exists(database.DB_FILE):
-                    import shutil
-                    shutil.copyfile(database.DB_FILE, database.DB_FILE + ".bak")
-                    
-                with open(database.DB_FILE, "wb") as f:
-                    f.write(file_content)
-                
-                self.remote_db_sha = data["sha"]
-                QMessageBox.information(self, "동기화 완료", f"원격 GitHub에서 castech.db 파일을 정상적으로 로드했습니다.\n(SHA: {self.remote_db_sha[:8]})")
-                self.load_all_data()
-        except Exception as e:
-            QMessageBox.critical(self, "동기화 실패", f"데이터베이스 다운로드 실패: {e}")
-        finally:
-            self.btn_db_pull.setEnabled(True)
-            self.btn_db_pull.setText("📥 DB 불러오기 (Pull)")
-
-    def push_db_action(self):
-        token = self.github_token
-        repo = self.github_repo
-        branch = self.github_branch
-        
-        if not token or not repo or not branch:
-            QMessageBox.warning(self, "설정 미비", "GitHub 토큰, 레포지토리, 브랜치 설정이 올바르지 않습니다.")
-            return
-            
-        self.btn_db_push.setEnabled(False)
-        self.btn_db_push.setText("💾 동기화 중(Push)...")
-        QApplication.processEvents()
-        
-        # 1단계: 원격 저장소에 있는 현재 파일의 SHA 값 가져오기
-        url_get = f"https://api.github.com/repos/{repo}/contents/castech.db?ref={branch}"
-        req_get = urllib.request.Request(url_get)
-        req_get.add_header("Authorization", f"token {token}")
-        req_get.add_header("Accept", "application/vnd.github.v3+json")
-        req_get.add_header("User-Agent", "CAS-TECH-Admin-App")
-        
-        existing_sha = self.remote_db_sha
-        try:
-            with urllib.request.urlopen(req_get) as resp:
-                data = json.loads(resp.read().decode('utf-8'))
-                existing_sha = data["sha"]
-        except Exception:
-            pass # 신규 생성이거나 에러 시 그대로 진행
-            
-        # 2단계: 로컬 DB 파일 Base64 인코딩
-        try:
-            with open(database.DB_FILE, "rb") as f:
-                content_bytes = f.read()
-            content_b64 = base64.b64encode(content_bytes).decode('utf-8')
-        except Exception as e:
-            QMessageBox.critical(self, "파일 오류", f"로컬 DB 파일을 읽는 과정에서 오류가 발생했습니다: {e}")
-            self.btn_db_push.setEnabled(True)
-            self.btn_db_push.setText("💾 최종 저장 및 동기화 (Push)")
-            return
-            
-        # 3단계: GitHub API PUT /repos/{owner}/{repo}/contents/castech.db
-        url_put = f"https://api.github.com/repos/{repo}/contents/castech.db"
-        payload = {
-            "message": f"Update castech.db from Admin Control Program [Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]",
-            "content": content_b64,
-            "branch": branch
-        }
-        if existing_sha:
-            payload["sha"] = existing_sha
-            
-        req_put = urllib.request.Request(url_put, method="PUT")
-        req_put.add_header("Authorization", f"token {token}")
-        req_put.add_header("Content-Type", "application/json")
-        req_put.add_header("Accept", "application/vnd.github.v3+json")
-        req_put.add_header("User-Agent", "CAS-TECH-Admin-App")
-        
-        try:
-            data_json = json.dumps(payload).encode('utf-8')
-            with urllib.request.urlopen(req_put, data=data_json) as response:
-                res_data = json.loads(response.read().decode('utf-8'))
-                self.remote_db_sha = res_data["content"]["sha"]
-                QMessageBox.information(self, "동기화 성공", f"변경된 데이터베이스가 원격 GitHub에 성공적으로 커밋/푸시되었습니다!\n(SHA: {self.remote_db_sha[:8]})")
-        except Exception as e:
-            QMessageBox.critical(self, "동기화 실패", f"데이터베이스 업로드(Push) 실패: {e}")
-        finally:
-            self.btn_db_push.setEnabled(True)
-            self.btn_db_push.setText("💾 최종 저장 및 동기화 (Push)")
+    def auto_pull_db(self):
+        """프로그램 시작 시 GitHub에서 최신 DB 파일을 받아옵니다."""
+        print("Starting auto pull from GitHub...")
+        success = database.sync_pull_from_github()
+        if success:
+            print("Auto pull from GitHub succeeded.")
+        else:
+            print("Auto pull from GitHub failed. Using local database.")
+        self.load_all_data()
 
     # =========================================================================
     # 🖨️ 보고서 생성 및 출력 모듈 (바탕화면 자동 출력)
