@@ -10,6 +10,19 @@ import functools
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "castech.db")
 EXCEL_FILE = os.path.join(BASE_DIR, "설비이력 및 점검마스터.xlsx")
+LOG_FILE = os.path.join(BASE_DIR, "error_log.txt")
+
+def log_sync_error(message, error_details=None):
+    """실시간 동기화 에러 발생 시 파일로 상세 내역을 남깁니다."""
+    try:
+        from datetime import datetime
+        log_line = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {message}\n"
+        if error_details:
+            log_line += f"Details: {error_details}\n"
+        with open(LOG_FILE, "a", encoding="utf-8") as f:
+            f.write(log_line)
+    except Exception:
+        pass
 
 def get_github_config():
     """Streamlit secrets 또는 로컬 github_config.json에서 설정 정보를 로드합니다."""
@@ -20,12 +33,19 @@ def get_github_config():
     # 1. Streamlit 환경 검사
     try:
         import streamlit as st
-        if hasattr(st, "secrets") and "github" in st.secrets:
-            token = st.secrets["github"].get("token")
-            repo = st.secrets["github"].get("repository")
-            branch = st.secrets["github"].get("branch", "main")
-    except Exception:
-        pass
+        if hasattr(st, "secrets"):
+            if "github" in st.secrets:
+                token = st.secrets["github"].get("token")
+                repo = st.secrets["github"].get("repository")
+                branch = st.secrets["github"].get("branch", "main")
+                if not token or not repo:
+                    log_sync_error("Streamlit secrets 'github' 블록은 존재하나 'token' 또는 'repository'가 비어있습니다.")
+            else:
+                log_sync_error("Streamlit secrets가 존재하지만 'github' 키를 찾을 수 없습니다.")
+        else:
+            log_sync_error("Streamlit에 secrets 속성이 존재하지 않습니다.")
+    except Exception as e:
+        log_sync_error("Streamlit secrets 읽기 실패", str(e))
         
     # 2. 로컬 파일 검사
     if not token or not repo:
@@ -36,8 +56,10 @@ def get_github_config():
                     token = config.get("token")
                     repo = config.get("repository")
                     branch = config.get("branch", "main")
-        except Exception:
-            pass
+            else:
+                log_sync_error("로컬 github_config.json 파일이 존재하지 않습니다.")
+        except Exception as e:
+            log_sync_error("로컬 github_config.json 파일 읽기 실패", str(e))
             
     return token, repo, branch
 
@@ -45,7 +67,7 @@ def sync_pull_from_github():
     """GitHub에서 최신 castech.db 파일을 다운로드하여 로컬에 저장합니다."""
     token, repo, branch = get_github_config()
     if not token or not repo:
-        print("GitHub configuration missing. Skipping Pull.")
+        log_sync_error("GitHub 설정이 누락되어 Pull을 스킵합니다. (Token or Repo 없음)")
         return False
         
     # 캐시 지연을 완벽하게 예방하기 위해 raw 미디어 타입을 직접 요청
@@ -71,7 +93,7 @@ def sync_pull_from_github():
         print("Successfully pulled castech.db from GitHub.")
         return True
     except Exception as e:
-        print(f"Error pulling from GitHub: {e}")
+        log_sync_error("GitHub에서 castech.db 다운로드(Pull) 실패", str(e))
         return False
 
 def get_github_file_sha(token, repo, branch, path):
@@ -96,11 +118,11 @@ def sync_push_to_github():
     """로컬 castech.db 파일을 GitHub에 업로드합니다."""
     token, repo, branch = get_github_config()
     if not token or not repo:
-        print("GitHub configuration missing. Skipping Push.")
+        log_sync_error("GitHub 설정이 누락되어 Push를 스킵합니다. (Token or Repo 없음)")
         return False
         
     if not os.path.exists(DB_FILE):
-        print("Local DB file not found. Skipping Push.")
+        log_sync_error("로컬 DB 파일을 찾을 수 없어 Push를 스킵합니다.")
         return False
         
     headers = {
@@ -110,9 +132,13 @@ def sync_push_to_github():
     }
     
     # 파일 내용 읽기 및 base64 인코딩
-    with open(DB_FILE, "rb") as f:
-        content_bytes = f.read()
-    content_b64 = base64.b64encode(content_bytes).decode("utf-8")
+    try:
+        with open(DB_FILE, "rb") as f:
+            content_bytes = f.read()
+        content_b64 = base64.b64encode(content_bytes).decode("utf-8")
+    except Exception as e:
+        log_sync_error("로컬 DB 파일 읽기 및 base64 변환 에러", str(e))
+        return False
     
     # 기존 파일의 SHA 조회
     sha = get_github_file_sha(token, repo, branch, "castech.db")
@@ -136,9 +162,10 @@ def sync_push_to_github():
         print("Attempting to push castech.db to GitHub...")
         with urllib.request.urlopen(req) as response:
             print("Successfully pushed castech.db to GitHub.")
+            log_sync_error("실시간 동기화(Push)에 최종 성공했습니다!")
             return True
     except Exception as e:
-        print(f"Error pushing to GitHub: {e}")
+        log_sync_error("GitHub로 castech.db 업로드(Push) 실패", str(e))
         return False
 
 def github_sync(func):
