@@ -1,9 +1,176 @@
 import os
 import sqlite3
 import pandas as pd
+import json
+import base64
+import urllib.request
+import urllib.error
+import functools
 
 DB_FILE = "castech.db"
 EXCEL_FILE = "설비이력 및 점검마스터.xlsx"
+
+def get_github_config():
+    """Streamlit secrets 또는 로컬 github_config.json에서 설정 정보를 로드합니다."""
+    token = None
+    repo = None
+    branch = "main"
+    
+    # 1. Streamlit 환경 검사
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "github" in st.secrets:
+            token = st.secrets["github"].get("token")
+            repo = st.secrets["github"].get("repository")
+            branch = st.secrets["github"].get("branch", "main")
+    except Exception:
+        pass
+        
+    # 2. 로컬 파일 검사
+    if not token or not repo:
+        try:
+            if os.path.exists("github_config.json"):
+                with open("github_config.json", "r", encoding="utf-8") as f:
+                    config = json.load(f)
+                    token = config.get("token")
+                    repo = config.get("repository")
+                    branch = config.get("branch", "main")
+        except Exception:
+            pass
+            
+    return token, repo, branch
+
+def sync_pull_from_github():
+    """GitHub에서 최신 castech.db 파일을 다운로드하여 로컬에 저장합니다."""
+    token, repo, branch = get_github_config()
+    if not token or not repo:
+        print("GitHub configuration missing. Skipping Pull.")
+        return False
+        
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Antigravity-Agent"
+    }
+    
+    import urllib.parse
+    safe_path = urllib.parse.quote(DB_FILE)
+    url = f"https://api.github.com/repos/{repo}/contents/{safe_path}?ref={branch}"
+    req = urllib.request.Request(url, headers=headers)
+    
+    try:
+        print("Attempting to pull castech.db from GitHub...")
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            
+        download_url = data.get("download_url")
+        if not download_url:
+            content_b64 = data.get("content", "").replace("\n", "")
+            db_content = base64.b64decode(content_b64)
+        else:
+            raw_req = urllib.request.Request(download_url, headers=headers)
+            with urllib.request.urlopen(raw_req) as raw_response:
+                db_content = raw_response.read()
+                
+        # DB 파일 덮어쓰기
+        with open(DB_FILE, "wb") as f:
+            f.write(db_content)
+        print("Successfully pulled castech.db from GitHub.")
+        return True
+    except Exception as e:
+        print(f"Error pulling from GitHub: {e}")
+        return False
+
+def get_github_file_sha(token, repo, branch, path):
+    """GitHub 저장소 파일의 SHA를 가져옵니다."""
+    import urllib.parse
+    safe_path = urllib.parse.quote(path)
+    url = f"https://api.github.com/repos/{repo}/contents/{safe_path}?ref={branch}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Antigravity-Agent"
+    }
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            return data.get("sha")
+    except Exception:
+        return None
+
+def sync_push_to_github():
+    """로컬 castech.db 파일을 GitHub에 업로드합니다."""
+    token, repo, branch = get_github_config()
+    if not token or not repo:
+        print("GitHub configuration missing. Skipping Push.")
+        return False
+        
+    if not os.path.exists(DB_FILE):
+        print("Local DB file not found. Skipping Push.")
+        return False
+        
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "Antigravity-Agent"
+    }
+    
+    # 파일 내용 읽기 및 base64 인코딩
+    with open(DB_FILE, "rb") as f:
+        content_bytes = f.read()
+    content_b64 = base64.b64encode(content_bytes).decode("utf-8")
+    
+    # 기존 파일의 SHA 조회
+    sha = get_github_file_sha(token, repo, branch, DB_FILE)
+    
+    import urllib.parse
+    safe_path = urllib.parse.quote(DB_FILE)
+    url = f"https://api.github.com/repos/{repo}/contents/{safe_path}"
+    
+    payload = {
+        "message": "Auto-sync database update via app execution",
+        "content": content_b64,
+        "branch": branch
+    }
+    if sha:
+        payload["sha"] = sha
+        
+    req_data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=req_data, headers=headers, method="PUT")
+    
+    try:
+        print("Attempting to push castech.db to GitHub...")
+        with urllib.request.urlopen(req) as response:
+            print("Successfully pushed castech.db to GitHub.")
+            return True
+    except Exception as e:
+        print(f"Error pushing to GitHub: {e}")
+        return False
+
+def github_sync(func):
+    """DB 변경 작업을 수행하기 전에 Pull하고, 완료 후에 Push하여 GitHub와 동기화하는 데코레이터입니다."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        # 1. 작업 전 Pull (깃허브의 최신 데이터로 로컬 동기화)
+        sync_pull_from_github()
+        
+        # 2. 본래 DB 함수 실행
+        result = func(*args, **kwargs)
+        
+        # 3. 함수 실행 결과 성공 여부 체크 후 Push
+        success = False
+        if isinstance(result, tuple):
+            success = result[0]
+        else:
+            success = bool(result)
+            
+        if success:
+            sync_push_to_github()
+            
+        return result
+    return wrapper
+
 
 def get_connection():
     """SQLite 데이터베이스 연결을 반환합니다."""
@@ -170,6 +337,7 @@ def get_equipment_by_id(eq_id):
     conn.close()
     return dict(row) if row else None
 
+@github_sync
 def add_equipment(eq_data):
     """신규 계기를 등록합니다."""
     conn = get_connection()
@@ -227,6 +395,7 @@ def get_history_by_id(history_id):
     conn.close()
     return dict(row) if row else None
 
+@github_sync
 def add_history(history_data):
     """새로운 점검/수리 이력을 등록합니다."""
     conn = get_connection()
@@ -250,6 +419,7 @@ def add_history(history_data):
     finally:
         conn.close()
 
+@github_sync
 def update_history(history_id, history_data):
     """기존 점검/수리 이력을 수정합니다."""
     conn = get_connection()
@@ -281,18 +451,62 @@ def update_history(history_id, history_data):
     finally:
         conn.close()
 
-def get_workers():
-    """데이터베이스에서 고유 작업자 목록을 조회합니다."""
+def ensure_worker_table():
+    """작업자 테이블이 없는 경우 생성하고 기존 점검이력에서 고유 작업자를 마이그레이션합니다."""
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        SELECT DISTINCT 작업자명 FROM 점검이력 
-        WHERE 작업자명 IS NOT NULL AND 작업자명 != '' AND 작업자명 != '선택하세요'
-        ORDER BY 작업자명
-    """)
-    workers = [row[0] for row in cursor.fetchall()]
-    conn.close()
-    return workers
+    try:
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='작업자'")
+        if not cursor.fetchone():
+            cursor.execute("""
+                CREATE TABLE 작업자 (
+                    작업자명 TEXT PRIMARY KEY,
+                    권한 TEXT,
+                    등록일시 TEXT
+                )
+            """)
+            conn.commit()
+            
+            cursor.execute("""
+                SELECT DISTINCT 작업자명 FROM 점검이력 
+                WHERE 작업자명 IS NOT NULL AND 작업자명 != '' AND 작업자명 != '선택하세요'
+            """)
+            workers = [row[0] for row in cursor.fetchall()]
+            
+            from datetime import datetime
+            now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            for w in workers:
+                cursor.execute("""
+                    INSERT OR IGNORE INTO 작업자 (작업자명, 권한, 등록일시)
+                    VALUES (?, '작업자', ?)
+                """, (w.strip(), now_str))
+            conn.commit()
+    except Exception:
+        pass
+    finally:
+        conn.close()
+
+def get_workers():
+    """데이터베이스에서 고유 작업자 목록을 조회합니다. 작업자 테이블에서 먼저 가져오며, 없으면 점검이력에서 가져옵니다."""
+    ensure_worker_table()
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT 작업자명 FROM 작업자 ORDER BY 작업자명")
+        workers = [row[0] for row in cursor.fetchall()]
+        if not workers:
+            cursor.execute("""
+                SELECT DISTINCT 작업자명 FROM 점검이력 
+                WHERE 작업자명 IS NOT NULL AND 작업자명 != '' AND 작업자명 != '선택하세요'
+                ORDER BY 작업자명
+            """)
+            workers = [row[0] for row in cursor.fetchall()]
+        return workers
+    except Exception:
+        return []
+    finally:
+        conn.close()
+@github_sync
 def add_client(client_name):
     """새로운 거래처를 등록하기 위해 임시 더미 계기를 추가합니다."""
     if not client_name:
@@ -315,6 +529,7 @@ def add_client(client_name):
     finally:
         conn.close()
 
+@github_sync
 def rename_client(old_name, new_name):
     """거래처명을 변경합니다. 설비마스터와 점검이력의 거래처명을 일괄 업데이트합니다."""
     if not old_name or not new_name:
@@ -333,6 +548,7 @@ def rename_client(old_name, new_name):
     finally:
         conn.close()
 
+@github_sync
 def update_equipment(eq_id, eq_data):
     """기존 계기의 정보를 수정합니다. 설비ID 자체도 변경될 수 있으므로, 기존 ID를 기준으로 UPDATE합니다."""
     conn = get_connection()
