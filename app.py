@@ -682,14 +682,24 @@ if st.session_state.selected_client is None:
     if not clients:
         st.info("데이터베이스에 등록된 거래처가 없습니다. 먼저 엑셀 마스터를 임포트하거나 아래에서 새 거래처를 등록해 주세요.")
     else:
-        cards_html = '<div class="client-container">'
-        for idx, client in enumerate(clients):
-            worker_param = urllib.parse.quote(st.session_state.login_worker) if st.session_state.login_worker else ""
-            client_param = urllib.parse.quote(client)
-            href_url = f"?client={client_param}&worker={worker_param}"
-            cards_html += f'<a href="{href_url}" target="_self" class="client-card">🏢 {client}</a>'
-        cards_html += '</div>'
-        st.markdown(cards_html, unsafe_allow_html=True)
+        # 거래처 목록을 2열 그리드로 배치하여 모바일 네이티브 연동 보장
+        if clients:
+            cols = st.columns(2)
+            for idx, client in enumerate(clients):
+                col_idx = idx % 2
+                with cols[col_idx]:
+                    if st.button(f"🏢 {client}", key=f"client_btn_{idx}", use_container_width=True):
+                        st.session_state.selected_client = client
+                        st.session_state.selected_eq_id = None
+                        st.session_state.search_filter_id = None
+                        st.session_state.show_all = True
+                        st.session_state.edit_mode = False
+                        st.session_state.search_result_eq_id = None
+                        st.session_state.search_query = ""
+                        st.session_state.last_search_query = ""
+                        st.session_state.search_performed = False
+                        sync_query_params()
+                        st.rerun()
                     
     # 거래처 추가 및 수정 메뉴
     st.markdown('<div style="height: 40px;"></div>', unsafe_allow_html=True)
@@ -775,23 +785,22 @@ else:
     if st.session_state.new_eq_form_open:
         st.markdown('<div class="section-title">🔧 계기등록 및 관리</div>', unsafe_allow_html=True)
         
-        # Render the custom sub-menu bar
-        client_param = urllib.parse.quote(st.session_state.selected_client)
-        worker_param = urllib.parse.quote(st.session_state.login_worker)
-        
-        href_new_eq = f"?client={client_param}&worker={worker_param}&menu=new_eq"
-        href_history = f"?client={client_param}&worker={worker_param}&menu=history"
-        
-        active_new_eq = "active" if st.session_state.mgmt_sub_menu == "new_eq" else ""
-        active_history = "active" if st.session_state.mgmt_sub_menu == "history" else ""
-        
-        submenu_html = f"""
-        <div class="submenu-container">
-            <a href="{href_new_eq}" target="_self" class="submenu-item {active_new_eq}">➕ 계기등록및수정</a>
-            <a href="{href_history}" target="_self" class="submenu-item {active_history}">📅 수리점검내역</a>
-        </div>
-        """
-        st.markdown(submenu_html, unsafe_allow_html=True)
+        # Render the custom sub-menu bar using native buttons
+        col_menu1, col_menu2 = st.columns(2)
+        with col_menu1:
+            btn_label1 = "🎯 ➕ 계기등록 및 수정" if st.session_state.mgmt_sub_menu == "new_eq" else "➕ 계기등록 및 수정"
+            if st.button(btn_label1, key="btn_menu_new_eq", use_container_width=True):
+                st.session_state.mgmt_sub_menu = "new_eq"
+                st.session_state.new_eq_form_open = True
+                sync_query_params()
+                st.rerun()
+        with col_menu2:
+            btn_label2 = "🎯 📅 수리점검내역" if st.session_state.mgmt_sub_menu == "history" else "📅 수리점검내역"
+            if st.button(btn_label2, key="btn_menu_history", use_container_width=True):
+                st.session_state.mgmt_sub_menu = "history"
+                st.session_state.new_eq_form_open = True
+                sync_query_params()
+                st.rerun()
         
         if st.session_state.mgmt_sub_menu == "new_eq":
             st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
