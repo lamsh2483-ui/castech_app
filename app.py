@@ -86,6 +86,14 @@ st.set_page_config(
 if not os.path.exists(database.DB_FILE):
     database.init_db()
 
+# 세션 시작 시 GitHub 원격지에서 최신 DB 가져옴
+if "db_pulled" not in st.session_state:
+    try:
+        database.sync_pull_from_github()
+    except Exception:
+        pass
+    st.session_state.db_pulled = True
+
 # 사진 저장용 폴더 생성
 PHOTOS_DIR = "photos"
 if not os.path.exists(PHOTOS_DIR):
@@ -621,9 +629,6 @@ sync_query_params()
 # (QR 기능이 제거되어 이전 함수는 삭제됨)
 
 # --- 비밀번호 로그인 체크 로직 ---
-# 사장님 설정: 초기 비밀번호를 변경하시려면 아래의 "1234" 부분을 변경하고 저장해 주세요.
-APP_PASSWORD = "1234"
-
 if "login_worker" not in st.session_state:
     st.session_state.login_worker = None
 
@@ -651,16 +656,37 @@ if not st.session_state.authenticated:
             if st.button("🔓 로그인"):
                 if final_worker == "선택하세요" or not final_worker:
                     st.error("작업자를 선택하거나 새 작업자 이름을 입력해 주세요.")
-                elif pw_input != APP_PASSWORD:
-                    st.error("비밀번호가 일치하지 않습니다. 다시 확인해 주세요.")
+                elif not pw_input:
+                    st.error("비밀번호를 입력해 주세요.")
                 else:
-                    st.session_state.authenticated = True
-                    st.session_state.login_worker = final_worker
-                    st.session_state.selected_client = None  # 로그인 시 항상 거래처 선택 화면이 첫 화면으로 나오도록 초기화
-                    st.success(f"{final_worker}님 로그인 성공!")
-                    sync_query_params()
-                    st.rerun()
-                    
+                    # 기존 작업자인 경우 DB 비밀번호와 매칭
+                    if selected_worker != "새 작업자 직접 등록..." and final_worker in db_workers:
+                        db_pw = database.get_worker_password(final_worker)
+                        if pw_input != db_pw:
+                            st.error("비밀번호가 일치하지 않습니다. 다시 확인해 주세요.")
+                        else:
+                            st.session_state.authenticated = True
+                            st.session_state.login_worker = final_worker
+                            st.session_state.selected_client = None
+                            st.success(f"{final_worker}님 로그인 성공!")
+                            sync_query_params()
+                            st.rerun()
+                    else:
+                        # 새 작업자 등록 시도
+                        if final_worker in db_workers:
+                            st.error("이미 존재하는 작업자 이름입니다. 목록에서 선택 후 로그인해 주세요.")
+                        else:
+                            ok, msg = database.register_new_worker(final_worker, pw_input)
+                            if ok:
+                                st.session_state.authenticated = True
+                                st.session_state.login_worker = final_worker
+                                st.session_state.selected_client = None
+                                st.success(f"새 작업자 '{final_worker}' 등록 및 로그인 성공!")
+                                sync_query_params()
+                                st.rerun()
+                            else:
+                                st.error(f"작업자 등록 실패: {msg}")
+                                
     st.stop() # 로그인이 완료되지 않았으므로 아래의 모든 코드 실행 중단 및 화면 잠금
 
 # (QR 코드 디코딩 함수 삭제됨)
@@ -678,6 +704,30 @@ if st.session_state.selected_client is None:
     </div>
     """.replace("st.session_state.login_worker", f"👤 <b>{st.session_state.login_worker}</b>"), unsafe_allow_html=True)
     
+    # ----------------------------------------------------
+    # 비밀번호 변경 익스팬더
+    # ----------------------------------------------------
+    with st.expander("👤 내 비밀번호 변경", expanded=False):
+        st.markdown(f"현재 로그인된 작업자: **{st.session_state.login_worker}**")
+        curr_pw = st.text_input("현재 비밀번호", type="password", key="chg_curr_pw")
+        new_pw = st.text_input("새 비밀번호", type="password", key="chg_new_pw")
+        confirm_pw = st.text_input("새 비밀번호 확인", type="password", key="chg_confirm_pw")
+        if st.button("💾 비밀번호 변경 실행", key="chg_pw_btn"):
+            if not curr_pw or not new_pw or not confirm_pw:
+                st.error("모든 항목을 입력해 주세요.")
+            elif new_pw != confirm_pw:
+                st.error("새 비밀번호와 확인이 일치하지 않습니다.")
+            else:
+                db_pw = database.get_worker_password(st.session_state.login_worker)
+                if curr_pw != db_pw:
+                    st.error("현재 비밀번호가 일치하지 않습니다.")
+                else:
+                    ok, msg = database.change_worker_password(st.session_state.login_worker, new_pw)
+                    if ok:
+                        st.success("비밀번호가 성공적으로 변경되었습니다!")
+                    else:
+                        st.error(msg)
+                        
     st.markdown('<div class="section-title">🏢 거래처 선택</div>', unsafe_allow_html=True)
     clients = database.get_clients()
     
