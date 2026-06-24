@@ -108,6 +108,13 @@ def sync_pull_from_github():
         with open(DB_FILE, "wb") as f:
             f.write(db_content)
         print("Successfully pulled castech.db from GitHub.")
+        
+        # Pull 직후 스키마 보정 수행
+        try:
+            ensure_worker_table()
+        except Exception as e:
+            print(f"Error run ensure_worker_table after pull: {e}")
+            
         return True
     except Exception as e:
         log_sync_error("GitHub에서 castech.db 다운로드(Pull) 실패", str(e))
@@ -499,7 +506,8 @@ def ensure_worker_table():
                 CREATE TABLE 작업자 (
                     작업자명 TEXT PRIMARY KEY,
                     권한 TEXT,
-                    등록일시 TEXT
+                    등록일시 TEXT,
+                    비밀번호 TEXT DEFAULT '1234'
                 )
             """)
             conn.commit()
@@ -514,12 +522,19 @@ def ensure_worker_table():
             now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             for w in workers:
                 cursor.execute("""
-                    INSERT OR IGNORE INTO 작업자 (작업자명, 권한, 등록일시)
-                    VALUES (?, '작업자', ?)
+                    INSERT OR IGNORE INTO 작업자 (작업자명, 권한, 등록일시, 비밀번호)
+                    VALUES (?, '작업자', ?, '1234')
                 """, (w.strip(), now_str))
             conn.commit()
-    except Exception:
-        pass
+        else:
+            # 테이블이 이미 있는 경우 비밀번호 컬럼 존재 여부 체크 후 추가
+            cursor.execute("PRAGMA table_info(작업자)")
+            cols = [col[1] for col in cursor.fetchall()]
+            if "비밀번호" not in cols:
+                cursor.execute("ALTER TABLE 작업자 ADD COLUMN 비밀번호 TEXT DEFAULT '1234'")
+                conn.commit()
+    except Exception as e:
+        print(f"Error ensuring worker table schema: {e}")
     finally:
         conn.close()
 
@@ -619,6 +634,59 @@ def update_equipment(eq_id, eq_data):
         return True, "계기 정보가 성공적으로 수정되었습니다."
     except Exception as e:
         return False, f"계기 정보 수정 실패: {str(e)}"
+    finally:
+        conn.close()
+
+def get_worker_password(name):
+    """작업자의 비밀번호를 가져옵니다. 없으면 '1234'를 반환합니다."""
+    # 비밀번호 검증 전 원격 DB에서 최신 데이터 가져옴
+    sync_pull_from_github()
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT 비밀번호 FROM 작업자 WHERE 작업자명 = ?", (name,))
+        row = cursor.fetchone()
+        if row:
+            return row[0] or "1234"
+        return "1234" # 기본값 대처
+    except Exception:
+        return "1234"
+    finally:
+        conn.close()
+
+@github_sync
+def change_worker_password(name, new_password):
+    """작업자의 비밀번호를 변경합니다."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE 작업자 SET 비밀번호 = ? WHERE 작업자명 = ?", (new_password, name))
+        conn.commit()
+        return True, "비밀번호가 성공적으로 변경되었습니다."
+    except Exception as e:
+        return False, str(e)
+    finally:
+        conn.close()
+
+@github_sync
+def register_new_worker(name, password):
+    """신규 작업자를 등록합니다. 중복 이름이 있으면 False를 반환합니다."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT 1 FROM 작업자 WHERE 작업자명 = ?", (name,))
+        if cursor.fetchone():
+            return False, "이미 존재하는 작업자 이름입니다."
+        from datetime import datetime
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        cursor.execute("""
+            INSERT INTO 작업자 (작업자명, 권한, 등록일시, 비밀번호)
+            VALUES (?, '작업자', ?, ?)
+        """, (name, now_str, password))
+        conn.commit()
+        return True, "성공적으로 가입되었습니다."
+    except Exception as e:
+        return False, str(e)
     finally:
         conn.close()
 
