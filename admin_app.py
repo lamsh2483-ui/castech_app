@@ -1670,6 +1670,10 @@ class AdminMainWindow(QMainWindow):
         else:
             print("Auto pull from GitHub failed. Using local database.")
         self.load_all_data()
+        
+        # 로컬에 있지만 깃허브에 누락된 사진이 있다면 백그라운드로 자동 동기화 업로드
+        import threading
+        threading.Thread(target=database.sync_local_photos_to_github, daemon=True).start()
 
     # =========================================================================
     # 🖨️ 보고서 생성 및 출력 모듈 (바탕화면 자동 출력)
