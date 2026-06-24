@@ -358,6 +358,12 @@ class AdminMainWindow(QMainWindow):
         ])
         self.eq_table.verticalHeader().setDefaultSectionSize(55) # 사진 표시를 위해 행 높이 조정
         self.eq_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        
+        # 더블클릭/클릭 시 수정 안 되고 행만 선택되도록 설정
+        self.eq_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.eq_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.eq_table.setSelectionMode(QTableWidget.SingleSelection)
+        
         self.eq_table.itemChanged.connect(self.on_eq_cell_edited)
         eq_layout.addWidget(self.eq_table)
         
@@ -914,6 +920,7 @@ class AdminMainWindow(QMainWindow):
     def add_eq_dialog(self):
         dialog = QDialog(self)
         dialog.setWindowTitle("계기 사양 등록")
+        dialog.resize(800, 600)
         form = QFormLayout(dialog)
         
         client_combo = QComboBox()
@@ -1059,6 +1066,7 @@ class AdminMainWindow(QMainWindow):
         
         dialog = QDialog(self)
         dialog.setWindowTitle("계기 사양 수정")
+        dialog.resize(800, 600)
         form = QFormLayout(dialog)
         
         client_combo = QComboBox()
