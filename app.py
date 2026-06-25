@@ -10,9 +10,16 @@ import database
 import urllib.parse
 from fpdf import FPDF
 
-@st.dialog("사진 크게 보기", width="large")
-def show_large_image(image_path):
-    st.image(image_path, use_container_width=True)
+# st.dialog 지원 여부에 따른 안전한 데코레이터 정의
+if hasattr(st, "dialog"):
+    @st.dialog("사진 크게 보기", width="large")
+    def show_large_image(image_path):
+        st.image(image_path, use_container_width=True)
+else:
+    # st.dialog이 없는 구버전 Streamlit을 위한 대체 함수
+    def show_large_image(image_path):
+        st.warning("이 버전의 Streamlit에서는 모달 팝업 크게 보기가 지원되지 않습니다. 아래 이미지를 확인하세요.")
+        st.image(image_path, use_container_width=True)
 
 # PDF 보고서 생성 헬퍼 함수 정의
 def generate_pdf_report(client_name, start_date_str, end_date_str, selected_eq_str, histories):
