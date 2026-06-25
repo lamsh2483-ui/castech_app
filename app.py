@@ -643,10 +643,10 @@ def handle_navigation_sync():
         st.rerun()
         
     # 5. 검색어 동기화
-    url_q = st.query_params.get("q")
+    url_q = st.query_params.get("q") or ""
     if url_q != st.session_state.search_query:
-        st.session_state.search_query = url_q or ""
-        st.session_state.last_search_query = url_q or ""
+        st.session_state.search_query = url_q
+        st.session_state.last_search_query = url_q
         st.session_state.search_performed = bool(url_q)
         st.rerun()
 
