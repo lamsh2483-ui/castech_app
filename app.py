@@ -990,18 +990,16 @@ else:
                             if p1_path:
                                 database.download_photo_from_github(p1_path)
                             if p1_path and os.path.exists(p1_path):
-                                st.image(p1_path, caption="설비사진 1", use_container_width=True)
-                                if st.button("🔍 크게 보기", key="zoom_detail_p1"):
-                                    show_large_image(p1_path)
+                                # 썸네일 크기로 보여주고 터치시 확대 지원 (use_container_width 대신 width 사용 및 form 내 에러 버튼 제거)
+                                st.image(p1_path, caption="설비사진 1 (터치시 확대)", width=120)
                             else:
                                 st.caption("등록된 사진 1 없음")
                         with col_pic2:
                             if p2_path:
                                 database.download_photo_from_github(p2_path)
                             if p2_path and os.path.exists(p2_path):
-                                st.image(p2_path, caption="설비사진 2", use_container_width=True)
-                                if st.button("🔍 크게 보기", key="zoom_detail_p2"):
-                                    show_large_image(p2_path)
+                                # 썸네일 크기로 보여주고 터치시 확대 지원 (use_container_width 대신 width 사용 및 form 내 에러 버튼 제거)
+                                st.image(p2_path, caption="설비사진 2 (터치시 확대)", width=120)
                             else:
                                 st.caption("등록된 사진 2 없음")
                                 
