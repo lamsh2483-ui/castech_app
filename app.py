@@ -599,6 +599,12 @@ if "last_search_query" not in st.session_state:
     st.session_state.last_search_query = ""
 if "search_performed" not in st.session_state:
     st.session_state.search_performed = False
+if "edit_search_query" not in st.session_state:
+    st.session_state.edit_search_query = ""
+if "edit_search_performed" not in st.session_state:
+    st.session_state.edit_search_performed = False
+if "edit_selected_eq_id" not in st.session_state:
+    st.session_state.edit_selected_eq_id = None
 if "sync_logs" not in st.session_state:
     st.session_state.sync_logs = []
 # URL 쿼리 파라미터와 st.session_state 간의 실시간 양방향 내비게이션 동기화 처리 (스마트폰 뒤로가기 완벽 연동)
@@ -626,6 +632,9 @@ def handle_navigation_sync():
         st.session_state.search_query = ""
         st.session_state.last_search_query = ""
         st.session_state.search_performed = False
+        st.session_state.edit_search_query = ""
+        st.session_state.edit_search_performed = False
+        st.session_state.edit_selected_eq_id = None
         st.rerun()
         
     # 3. 설비 ID 선택 상태 동기화 (뒤로가기 시 eq_id 해제 감지)
@@ -759,6 +768,9 @@ if st.session_state.selected_client is None:
                         st.session_state.search_query = ""
                         st.session_state.last_search_query = ""
                         st.session_state.search_performed = False
+                        st.session_state.edit_search_query = ""
+                        st.session_state.edit_search_performed = False
+                        st.session_state.edit_selected_eq_id = None
                         sync_query_params()
                         st.rerun()
                     
@@ -963,92 +975,148 @@ else:
                 if not eq_list:
                     st.info("수정할 수 있는 계기가 없습니다. 신규 등록을 먼저 해주세요.")
                 else:
-                    eq_options = [f"[{eq['설비ID']}] {eq['설비명']}" for eq in eq_list]
-                    selected_eq_str = st.selectbox("수정할 계기 선택", options=eq_options)
-                    selected_idx = eq_options.index(selected_eq_str)
-                    eq_data = eq_list[selected_idx]
-                    
-                    with st.form("edit_eq_form", clear_on_submit=False):
-                        edit_id = st.text_input("설비 ID (필수)", value=eq_data["설비ID"])
-                        edit_name = st.text_input("설비명 (필수)", value=eq_data["설비명"])
-                        edit_loc = st.text_input("설치위치", value=eq_data["설치위치"] or "")
-                        edit_ip = st.text_input("계측기 IP", value=eq_data["계측기_IP"] or "")
-                        edit_ind = st.text_input("인디게이터", value=eq_data["인디게이터"] or "")
-                        edit_lc = st.text_input("로드셀", value=eq_data["로드셀"] or "")
-                        edit_fmt = st.text_input("형식", value=eq_data["형식"] or "")
-                        edit_date = st.text_input("설치년월", value=eq_data["설치년월"] or "")
-                        
-                        # 썸네일 크기로 보여주고 터치시 확대 지원하기 위해 컬럼 비율 조절 (use_container_width=True가 라이트박스 원본 확대를 지원함)
-                        col_pic1, col_pic2, col_pic_space = st.columns([1.2, 1.2, 2.6])
-                        p1_path = eq_data["설비사진1"]
-                        p2_path = eq_data["설비사진2"]
-                        if p1_path and isinstance(p1_path, str):
-                            p1_path = p1_path.replace("\\", "/")
-                        if p2_path and isinstance(p2_path, str):
-                            p2_path = p2_path.replace("\\", "/")
+                    # 1. 수정 전용 검색 영역
+                    st.write("**✏️ 수정할 계기 검색 및 선택**")
+                    col_edit_search_input, col_edit_search_btn = st.columns([3, 1])
+                    with col_edit_search_input:
+                        edit_search_input = st.text_input(
+                            "수정할 계기 ID 또는 계기명을 입력하세요",
+                            value=st.session_state.get("edit_search_query", ""),
+                            placeholder="문자나 숫자를 입력하세요 (빈칸 검색 시 전체 표시)",
+                            label_visibility="collapsed",
+                            key="edit_eq_search_input"
+                        )
+                        edit_search_query_stripped = edit_search_input.strip()
+
+                    with col_edit_search_btn:
+                        confirm_edit_search = st.button("🔍 검색", key="confirm_edit_search_btn", use_container_width=True)
+
+                    if edit_search_query_stripped != st.session_state.get("edit_search_query", ""):
+                        st.session_state.edit_search_query = edit_search_query_stripped
+
+                    if confirm_edit_search:
+                        st.session_state.edit_search_performed = True
+                        st.session_state.edit_selected_eq_id = None
+                        st.rerun()
+
+                    # 2. 검색 이력에 따라 매칭되는 데이터를 리스트 형태로 나열
+                    if st.session_state.get("edit_search_performed", False):
+                        if len(st.session_state.edit_search_query) == 0:
+                            matching_edit_eqs = eq_list
+                        else:
+                            matching_edit_eqs = [
+                                eq for eq in eq_list
+                                if st.session_state.edit_search_query.lower() in eq["설비ID"].lower() or st.session_state.edit_search_query.lower() in eq["설비명"].lower()
+                            ]
+
+                        if matching_edit_eqs:
+                            st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
+                            st.write(f"📋 **수정 대상 검색 결과 ({len(matching_edit_eqs)}건)**")
+                            st.write("아래에서 수정할 계기를 터치(클릭)하면 정보 수정 폼이 활성화됩니다:")
                             
-                        with col_pic1:
-                            if p1_path:
-                                database.download_photo_from_github(p1_path)
-                            if p1_path and os.path.exists(p1_path):
-                                st.image(p1_path, caption="설비사진 1 (터치시 확대)", use_container_width=True)
-                            else:
-                                st.caption("등록된 사진 1 없음")
-                        with col_pic2:
-                            if p2_path:
-                                database.download_photo_from_github(p2_path)
-                            if p2_path and os.path.exists(p2_path):
-                                st.image(p2_path, caption="설비사진 2 (터치시 확대)", use_container_width=True)
-                            else:
-                                st.caption("등록된 사진 2 없음")
+                            for eq in matching_edit_eqs:
+                                is_selected = (eq["설비ID"] == st.session_state.get("edit_selected_eq_id"))
+                                btn_prefix = "🎯 " if is_selected else "⚙️ "
+                                btn_label = f"{btn_prefix}[{eq['설비ID']}] {eq['설비명']} ({eq['설치위치'] or '위치 미지정'})"
                                 
-                        edit_photo1 = st.file_uploader("새 설비 사진 1 업로드 (기존 사진을 변경하려면 업로드)", type=["png", "jpg", "jpeg"])
-                        edit_photo2 = st.file_uploader("새 설비 사진 2 업로드 (기존 사진을 변경하려면 업로드)", type=["png", "jpg", "jpeg"])
-                        
-                        submit_edit = st.form_submit_button("💾 수정 완료")
-                        if submit_edit:
-                            if not edit_id or not edit_name:
-                                st.error("설비 ID와 설비명은 필수 입력 항목입니다.")
-                            else:
-                                # 사진 파일 처리 (업로드 하지 않았으면 기존 경로 유지)
-                                p1_path = eq_data["설비사진1"] or ""
-                                p2_path = eq_data["설비사진2"] or ""
-                                if edit_photo1:
-                                    p1_path = os.path.join(PHOTOS_DIR, f"{edit_id}_1.jpg")
-                                    database.save_and_compress_image(edit_photo1, p1_path)
-                                    database.upload_photo_to_github(p1_path)
-                                if edit_photo2:
-                                    p2_path = os.path.join(PHOTOS_DIR, f"{edit_id}_2.jpg")
-                                    database.save_and_compress_image(edit_photo2, p2_path)
-                                    database.upload_photo_to_github(p2_path)
-                                        
-                                updated_eq_data = {
-                                    "거래처명": st.session_state.selected_client,
-                                    "설비ID": edit_id.strip(),
-                                    "설비명": edit_name.strip(),
-                                    "설치위치": edit_loc.strip(),
-                                    "계측기_IP": edit_ip.strip(),
-                                    "인디게이터": edit_ind.strip(),
-                                    "로드셀": edit_lc.strip(),
-                                    "형식": edit_fmt.strip(),
-                                    "설치년월": edit_date.strip(),
-                                    "설비사진1": p1_path,
-                                    "설비사진2": p2_path
-                                }
-                                
-                                ok, msg = database.update_equipment(eq_data["설비ID"], updated_eq_data)
-                                if ok:
-                                    st.success(msg)
-                                    st.session_state.new_eq_form_open = False
-                                    st.session_state.mgmt_sub_menu = None
-                                    st.session_state.selected_eq_id = edit_id.strip()
-                                    st.session_state.search_result_eq_id = edit_id.strip()
-                                    st.session_state.search_performed = True
-                                    st.session_state.search_query = ""
-                                    sync_query_params()
+                                if st.button(btn_label, key=f"btn_edit_list_select_{eq['설비ID']}", use_container_width=True):
+                                    st.session_state.edit_selected_eq_id = eq["설비ID"]
                                     st.rerun()
-                                else:
-                                    st.error(msg)
+                        else:
+                            st.warning("⚠️ 검색어와 일치하는 계기가 없습니다. 다시 검색해 주세요.")
+
+                    # 3. 계기가 최종 선택되었을 때만 수정 폼 활성화
+                    if st.session_state.get("edit_selected_eq_id"):
+                        eq_data = database.get_equipment_by_id(st.session_state.edit_selected_eq_id)
+                        
+                        if eq_data:
+                            st.markdown("---")
+                            st.write(f"⚙️ **[{eq_data['설비ID']}] {eq_data['설비명']} 정보 수정**")
+                            with st.form("edit_eq_form", clear_on_submit=False):
+                                edit_id = st.text_input("설비 ID (필수)", value=eq_data["설비ID"])
+                                edit_name = st.text_input("설비명 (필수)", value=eq_data["설비명"])
+                                edit_loc = st.text_input("설치위치", value=eq_data["설치위치"] or "")
+                                edit_ip = st.text_input("계측기 IP", value=eq_data["계측기_IP"] or "")
+                                edit_ind = st.text_input("인디게이터", value=eq_data["인디게이터"] or "")
+                                edit_lc = st.text_input("로드셀", value=eq_data["로드셀"] or "")
+                                edit_fmt = st.text_input("형식", value=eq_data["형식"] or "")
+                                edit_date = st.text_input("설치년월", value=eq_data["설치년월"] or "")
+                                
+                                # 썸네일 크기로 보여주고 터치시 확대 지원하기 위해 컬럼 비율 조절 (use_container_width=True가 라이트박스 원본 확대를 지원함)
+                                col_pic1, col_pic2, col_pic_space = st.columns([1.2, 1.2, 2.6])
+                                p1_path = eq_data["설비사진1"]
+                                p2_path = eq_data["설비사진2"]
+                                if p1_path and isinstance(p1_path, str):
+                                    p1_path = p1_path.replace("\\", "/")
+                                if p2_path and isinstance(p2_path, str):
+                                    p2_path = p2_path.replace("\\", "/")
+                                    
+                                with col_pic1:
+                                    if p1_path:
+                                        database.download_photo_from_github(p1_path)
+                                    if p1_path and os.path.exists(p1_path):
+                                        st.image(p1_path, caption="설비사진 1 (터치시 확대)", use_container_width=True)
+                                    else:
+                                        st.caption("등록된 사진 1 없음")
+                                with col_pic2:
+                                    if p2_path:
+                                        database.download_photo_from_github(p2_path)
+                                    if p2_path and os.path.exists(p2_path):
+                                        st.image(p2_path, caption="설비사진 2 (터치시 확대)", use_container_width=True)
+                                    else:
+                                        st.caption("등록된 사진 2 없음")
+                                        
+                                edit_photo1 = st.file_uploader("새 설비 사진 1 업로드 (기존 사진을 변경하려면 업로드)", type=["png", "jpg", "jpeg"])
+                                edit_photo2 = st.file_uploader("새 설비 사진 2 업로드 (기존 사진을 변경하려면 업로드)", type=["png", "jpg", "jpeg"])
+                                
+                                submit_edit = st.form_submit_button("💾 수정 완료")
+                                if submit_edit:
+                                    if not edit_id or not edit_name:
+                                        st.error("설비 ID와 설비명은 필수 입력 항목입니다.")
+                                    else:
+                                        # 사진 파일 처리 (업로드 하지 않았으면 기존 경로 유지)
+                                        p1_path = eq_data["설비사진1"] or ""
+                                        p2_path = eq_data["설비사진2"] or ""
+                                        if edit_photo1:
+                                            p1_path = os.path.join(PHOTOS_DIR, f"{edit_id}_1.jpg")
+                                            database.save_and_compress_image(edit_photo1, p1_path)
+                                            database.upload_photo_to_github(p1_path)
+                                        if edit_photo2:
+                                            p2_path = os.path.join(PHOTOS_DIR, f"{edit_id}_2.jpg")
+                                            database.save_and_compress_image(edit_photo2, p2_path)
+                                            database.upload_photo_to_github(p2_path)
+                                                
+                                        updated_eq_data = {
+                                            "거래처명": st.session_state.selected_client,
+                                            "설비ID": edit_id.strip(),
+                                            "설비명": edit_name.strip(),
+                                            "설치위치": edit_loc.strip(),
+                                            "계측기_IP": edit_ip.strip(),
+                                            "인디게이터": edit_ind.strip(),
+                                            "로드셀": edit_lc.strip(),
+                                            "형식": edit_fmt.strip(),
+                                            "설치년월": edit_date.strip(),
+                                            "설비사진1": p1_path,
+                                            "설비사진2": p2_path
+                                        }
+                                        
+                                        ok, msg = database.update_equipment(eq_data["설비ID"], updated_eq_data)
+                                        if ok:
+                                            st.success(msg)
+                                            st.session_state.new_eq_form_open = False
+                                            st.session_state.mgmt_sub_menu = None
+                                            st.session_state.selected_eq_id = edit_id.strip()
+                                            st.session_state.search_result_eq_id = edit_id.strip()
+                                            st.session_state.search_performed = True
+                                            st.session_state.search_query = ""
+                                            # 수정 성공 후 세션 상태 초기화
+                                            st.session_state.edit_search_query = ""
+                                            st.session_state.edit_search_performed = False
+                                            st.session_state.edit_selected_eq_id = None
+                                            sync_query_params()
+                                            st.rerun()
+                                        else:
+                                            st.error(msg)
                             
         elif st.session_state.mgmt_sub_menu == "history":
             st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
