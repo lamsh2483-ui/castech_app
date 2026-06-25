@@ -16,12 +16,127 @@ from PySide6.QtWidgets import (
     QMessageBox, QSplitter, QHeaderView, QTabWidget, QDialog, 
     QFormLayout, QDialogButtonBox
 )
-import pandas as pd
-import openpyxl
 import database
-from fpdf import FPDF
 
 CONFIG_FILE = "github_config.json"
+
+class ThemeColors:
+    # 밝고 깔끔하며 고급스러운 산업용 UI 테마 색상 설정
+    WINDOW_BG = "#f8fafc"         # 전체 윈도우 배경색 (Slate 50)
+    WIDGET_BG = "#ffffff"         # 주요 위젯 배경색 (하얀색)
+    WIDGET_BG_ALT = "#f1f5f9"     # 대체/헤더 배경색 (Slate 100)
+    
+    TEXT_MAIN = "#0f172a"         # 기본 텍스트색 (Slate 900)
+    TEXT_MUTED = "#475569"        # 보조 텍스트색 (Slate 600)
+    TEXT_ACCENT = "#1e3a8a"       # 주요 강조 텍스트색 (Navy 900)
+    TEXT_ON_ACCENT = "#ffffff"    # 강조 위 텍스트색 (하얀색)
+    
+    BORDER_DEFAULT = "#cbd5e1"    # 기본 테두리색 (Slate 300)
+    BORDER_HOVER = "#94a3b8"      # 마우스 호버 시 테두리색 (Slate 400)
+    BORDER_FOCUS = "#3b82f6"      # 입력창 포커스 시 테두리색 (Blue 500)
+    
+    PRIMARY = "#3b82f6"           # 주동작 버튼 배경색 (Blue 500)
+    PRIMARY_HOVER = "#2563eb"     # 주동작 버튼 호버 배경색 (Blue 600)
+    PRIMARY_PRESSED = "#1d4ed8"   # 주동작 버튼 클릭 배경색 (Blue 700)
+    
+    DANGER = "#fee2e2"            # 삭제/위험 버튼 배경색 (Red 100)
+    DANGER_TEXT = "#991b1b"       # 삭제/위험 버튼 텍스트색 (Red 800)
+    DANGER_HOVER = "#fecaca"      # 삭제/위험 버튼 호버 배경색 (Red 200)
+    DANGER_PRESSED = "#fca5a5"    # 삭제/위험 버튼 클릭 배경색 (Red 300)
+    
+    ITEM_HOVER = "#f1f5f9"        # 리스트/테이블 아이템 호버 배경색 (Slate 100)
+    ITEM_SELECTED = "#eff6ff"     # 리스트/테이블 아이템 선택 배경색 (Blue 50)
+    ITEM_SELECTED_BORDER = "#bfdbfe" # 선택 시 테두리색 (Blue 200)
+    ITEM_SELECTED_TEXT = "#2563eb" # 선택 시 텍스트색 (Blue 600)
+    
+    TABLE_GRID = "#e2e8f0"        # 테이블 그리드 라인 색상 (Slate 200)
+    SPLITTER_HANDLE = "#cbd5e1"   # 스플리터 핸들 색상 (Slate 300)
+
+class PhotoWidget(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.photo_path = ""
+        self.setFixedSize(100, 75)
+        
+        self.image_label = QLabel(self)
+        self.image_label.setFixedSize(100, 75)
+        self.image_label.setAlignment(Qt.AlignCenter)
+        self.image_label.setStyleSheet("border: 1px solid #cbd5e1; border-radius: 6px; background-color: #f1f5f9; color: #64748b; font-size: 11px;")
+        self.image_label.setText("사진 없음")
+        
+        self.delete_btn = QPushButton("✕", self)
+        self.delete_btn.setFixedSize(20, 20)
+        self.delete_btn.move(76, 4)
+        self.delete_btn.setCursor(Qt.PointingHandCursor)
+        self.delete_btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(239, 68, 68, 0.85);
+                color: white;
+                border: none;
+                border-radius: 10px;
+                font-weight: bold;
+                font-size: 10px;
+                padding: 0px;
+            }
+            QPushButton:hover {
+                background-color: rgb(220, 38, 38);
+            }
+        """)
+        self.delete_btn.clicked.connect(self.clear_photo)
+        self.delete_btn.hide()
+        
+    def enterEvent(self, event):
+        if self.photo_path:
+            self.delete_btn.show()
+            self.setCursor(Qt.PointingHandCursor)
+        else:
+            self.setCursor(Qt.ArrowCursor)
+        super().enterEvent(event)
+        
+    def leaveEvent(self, event):
+        self.delete_btn.hide()
+        self.setCursor(Qt.ArrowCursor)
+        super().leaveEvent(event)
+        
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.photo_path and os.path.exists(self.photo_path):
+            if not self.delete_btn.geometry().contains(event.pos()):
+                self.show_large_image()
+        super().mousePressEvent(event)
+        
+    def show_large_image(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("사진 크게 보기")
+        dialog.setMinimumSize(400, 300)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        img_label = QLabel(dialog)
+        pix = QPixmap(self.photo_path)
+        if not pix.isNull():
+            scaled_pix = pix.scaled(800, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            img_label.setPixmap(scaled_pix)
+            img_label.setAlignment(Qt.AlignCenter)
+            layout.addWidget(img_label)
+            
+        dialog.setLayout(layout)
+        dialog.exec()
+        
+    def set_photo(self, path):
+        self.photo_path = path if path else ""
+        if self.photo_path and os.path.exists(self.photo_path):
+            pix = QPixmap(self.photo_path)
+            if not pix.isNull():
+                scaled_pix = pix.scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                self.image_label.setPixmap(scaled_pix)
+                return
+        self.image_label.clear()
+        self.image_label.setText("사진 없음")
+        self.photo_path = ""
+        
+    def clear_photo(self):
+        self.set_photo("")
 
 class AdminMainWindow(QMainWindow):
     def __init__(self):
@@ -42,145 +157,161 @@ class AdminMainWindow(QMainWindow):
         # 3. GitHub 설정 불러오기
         self.load_github_config()
         
-        # 4. 시작 시 자동으로 DB 불러오기 (Pull)
+        # 4. 시작 시 로컬 DB 데이터를 먼저 화면에 즉시 로드 (시작 속도 극대화)
+        self.load_all_data()
+        
+        # 5. 백그라운드에서 최신 DB 데이터를 받아오고 화면을 갱신 (네트워크 대기 방지)
         self.auto_pull_db()
 
     def setup_styles(self):
-        # Industrial Embedded Dark UI 스타일시트 정의
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #121212;
-            }
-            QWidget {
-                background-color: #121212;
-                color: #ffffff;
-                font-family: 'Segoe UI', Arial, sans-serif;
-            }
-            QLabel {
-                color: #ffffff;
+        # Industrial Embedded Light UI 스타일시트 정의
+        self.setStyleSheet(f"""
+            QMainWindow {{
+                background-color: {ThemeColors.WINDOW_BG};
+            }}
+            QWidget {{
+                background-color: {ThemeColors.WINDOW_BG};
+                color: {ThemeColors.TEXT_MAIN};
+                font-family: 'Segoe UI', 'Malgun Gothic', Arial, sans-serif;
+            }}
+            QLabel {{
+                color: {ThemeColors.TEXT_MAIN};
                 font-size: 12px;
-            }
-            QLabel#tab-title {
-                color: #deff9a;
+            }}
+            QLabel#tab-title {{
+                color: {ThemeColors.TEXT_ACCENT};
                 font-size: 18px;
                 font-weight: bold;
                 margin-bottom: 10px;
-            }
-            QLineEdit, QComboBox, QDateEdit {
-                background-color: #1e1e1e;
-                border: 1px solid #333333;
-                border-radius: 5px;
-                color: #ffffff;
+            }}
+            QLineEdit, QComboBox, QDateEdit {{
+                background-color: {ThemeColors.WIDGET_BG};
+                border: 1px solid {ThemeColors.BORDER_DEFAULT};
+                border-radius: 6px;
+                color: {ThemeColors.TEXT_MAIN};
                 padding: 6px 10px;
                 font-size: 12px;
-            }
-            QLineEdit:focus, QComboBox:focus, QDateEdit:focus {
-                border: 1px solid #deff9a;
-            }
-            QPushButton {
-                background-color: #1e1e1e;
-                border: 1px solid #deff9a;
-                border-radius: 5px;
-                color: #deff9a;
+            }}
+            QLineEdit:hover, QComboBox:hover, QDateEdit:hover {{
+                border: 1px solid {ThemeColors.BORDER_HOVER};
+            }}
+            QLineEdit:focus, QComboBox:focus, QDateEdit:focus {{
+                border: 1.5px solid {ThemeColors.BORDER_FOCUS};
+                background-color: {ThemeColors.WIDGET_BG};
+            }}
+            QPushButton {{
+                background-color: {ThemeColors.WIDGET_BG};
+                border: 1px solid {ThemeColors.BORDER_DEFAULT};
+                border-radius: 6px;
+                color: {ThemeColors.TEXT_MAIN};
                 padding: 8px 16px;
                 font-weight: bold;
                 font-size: 12px;
-            }
-            QPushButton:hover {
-                background-color: #deff9a;
-                color: #121212;
-            }
-            QPushButton:pressed {
-                background-color: #c5eb80;
-                color: #121212;
-            }
-            QPushButton#action-btn {
-                background-color: #222222;
-                border: 1px solid #deff9a;
-                color: #deff9a;
-            }
-            QPushButton#action-btn:hover {
-                background-color: #deff9a;
-                color: #121212;
-            }
-            QPushButton#delete-btn {
-                background-color: #2c1a1a;
-                border: 1px solid #ff8a8a;
-                color: #ff8a8a;
-            }
-            QPushButton#delete-btn:hover {
-                background-color: #ff8a8a;
-                color: #121212;
-            }
-            QListWidget {
-                background-color: #181818;
-                border: 1px solid #2d2d2d;
-                border-radius: 6px;
-                color: #cccccc;
+            }}
+            QPushButton:hover {{
+                background-color: {ThemeColors.ITEM_HOVER};
+                border-color: {ThemeColors.BORDER_HOVER};
+                color: {ThemeColors.TEXT_MAIN};
+            }}
+            QPushButton:pressed {{
+                background-color: {ThemeColors.BORDER_DEFAULT};
+            }}
+            QPushButton#action-btn {{
+                background-color: {ThemeColors.PRIMARY};
+                border: 1px solid {ThemeColors.PRIMARY_HOVER};
+                color: {ThemeColors.TEXT_ON_ACCENT};
+            }}
+            QPushButton#action-btn:hover {{
+                background-color: {ThemeColors.PRIMARY_HOVER};
+                border-color: {ThemeColors.PRIMARY_PRESSED};
+            }}
+            QPushButton#action-btn:pressed {{
+                background-color: {ThemeColors.PRIMARY_PRESSED};
+            }}
+            QPushButton#delete-btn {{
+                background-color: {ThemeColors.DANGER};
+                border: 1px solid {ThemeColors.DANGER_PRESSED};
+                color: {ThemeColors.DANGER_TEXT};
+            }}
+            QPushButton#delete-btn:hover {{
+                background-color: {ThemeColors.DANGER_HOVER};
+                border-color: {ThemeColors.DANGER_TEXT};
+            }}
+            QPushButton#delete-btn:pressed {{
+                background-color: {ThemeColors.DANGER_PRESSED};
+            }}
+            QListWidget {{
+                background-color: {ThemeColors.WIDGET_BG};
+                border: 1px solid {ThemeColors.BORDER_DEFAULT};
+                border-radius: 8px;
+                color: {ThemeColors.TEXT_MUTED};
                 padding: 5px;
-            }
-            QListWidget::item {
+            }}
+            QListWidget::item {{
                 padding: 12px;
-                margin-bottom: 2px;
-                border-radius: 4px;
-            }
-            QListWidget::item:hover {
-                background-color: #262626;
-                color: #deff9a;
-            }
-            QListWidget::item:selected {
-                background-color: #deff9a;
-                color: #121212;
-                font-weight: bold;
-            }
-            QTableWidget {
-                background-color: #181818;
-                border: 1px solid #2d2d2d;
-                color: #ffffff;
-                gridline-color: #262626;
+                margin-bottom: 4px;
                 border-radius: 6px;
-            }
-            QTableWidget::item:hover {
-                background-color: #262626;
-            }
-            QTableWidget::item:selected {
-                background-color: #deff9a;
-                color: #121212;
-            }
-            QHeaderView::section {
-                background-color: #262626;
-                color: #deff9a;
+            }}
+            QListWidget::item:hover {{
+                background-color: {ThemeColors.ITEM_HOVER};
+                color: {ThemeColors.TEXT_ACCENT};
+            }}
+            QListWidget::item:selected {{
+                background-color: {ThemeColors.ITEM_SELECTED};
+                color: {ThemeColors.ITEM_SELECTED_TEXT};
+                border: 1px solid {ThemeColors.ITEM_SELECTED_BORDER};
+                font-weight: bold;
+            }}
+            QTableWidget {{
+                background-color: {ThemeColors.WIDGET_BG};
+                border: 1px solid {ThemeColors.BORDER_DEFAULT};
+                color: {ThemeColors.TEXT_MAIN};
+                gridline-color: {ThemeColors.TABLE_GRID};
+                border-radius: 8px;
+            }}
+            QTableWidget::item:hover {{
+                background-color: {ThemeColors.ITEM_HOVER};
+            }}
+            QTableWidget::item:selected {{
+                background-color: {ThemeColors.ITEM_SELECTED};
+                color: {ThemeColors.ITEM_SELECTED_TEXT};
+            }}
+            QHeaderView::section {{
+                background-color: {ThemeColors.WIDGET_BG_ALT};
+                color: {ThemeColors.TEXT_ACCENT};
                 font-weight: bold;
                 padding: 8px;
-                border: 1px solid #1a1a1a;
-            }
-            QTabWidget::pane {
-                border: 1px solid #2d2d2d;
-                background-color: #181818;
-                border-radius: 6px;
-            }
-            QTabBar::tab {
-                background-color: #222222;
-                color: #cccccc;
+                border: 1px solid {ThemeColors.BORDER_DEFAULT};
+            }}
+            QTabWidget::pane {{
+                border: 1px solid {ThemeColors.BORDER_DEFAULT};
+                background-color: {ThemeColors.WIDGET_BG};
+                border-radius: 8px;
+            }}
+            QTabBar::tab {{
+                background-color: {ThemeColors.WIDGET_BG_ALT};
+                color: {ThemeColors.TEXT_MUTED};
                 padding: 8px 16px;
-                border-top-left-radius: 4px;
-                border-top-right-radius: 4px;
+                border-top-left-radius: 6px;
+                border-top-right-radius: 6px;
                 margin-right: 2px;
-            }
-            QTabBar::tab:hover {
-                background-color: #2a2a2a;
-                color: #deff9a;
-            }
-            QTabBar::tab:selected {
-                background-color: #181818;
-                color: #deff9a;
-                border: 1px solid #2d2d2d;
-                border-bottom-color: #181818;
+                border: 1px solid {ThemeColors.BORDER_DEFAULT};
+                border-bottom: none;
+            }}
+            QTabBar::tab:hover {{
+                background-color: {ThemeColors.BORDER_DEFAULT};
+                color: {ThemeColors.TEXT_MAIN};
+            }}
+            QTabBar::tab:selected {{
+                background-color: {ThemeColors.WIDGET_BG};
+                color: {ThemeColors.TEXT_ACCENT};
+                border: 1px solid {ThemeColors.BORDER_DEFAULT};
+                border-bottom: 1px solid {ThemeColors.WIDGET_BG};
                 font-weight: bold;
-            }
-            QSplitter::handle {
-                background-color: #2d2d2d;
-            }
+            }}
+            QSplitter::handle {{
+                background-color: {ThemeColors.SPLITTER_HANDLE};
+            }}
         """)
 
     def setup_ui(self):
@@ -437,12 +568,12 @@ class AdminMainWindow(QMainWindow):
         
         # 보고서 설명
         desc = QLabel("선택한 조건의 점검/수리 데이터를 쏙 뽑아서 깔끔한 포맷의 Excel 또는 PDF 파일로 바탕화면에 생성합니다.")
-        desc.setStyleSheet("color: #aaaaaa; font-size: 13px;")
+        desc.setStyleSheet(f"color: {ThemeColors.TEXT_MUTED}; font-size: 13px;")
         layout.addWidget(desc)
         
         # 보고서 필터 박스
         filter_box = QWidget()
-        filter_box.setStyleSheet("background-color: #181818; border: 1.5px solid #2d2d2d; border-radius: 8px; padding: 20px;")
+        filter_box.setStyleSheet(f"background-color: {ThemeColors.WIDGET_BG}; border: 1px solid {ThemeColors.BORDER_DEFAULT}; border-radius: 8px; padding: 20px;")
         filter_layout = QFormLayout(filter_box)
         filter_layout.setSpacing(15)
         
@@ -626,6 +757,12 @@ class AdminMainWindow(QMainWindow):
                     pic_path = eq.get(col_pic)
                     col_target = len(cols) + p_idx # 9, 10번째 열
                     
+                    if pic_path and not os.path.exists(pic_path):
+                        try:
+                            database.download_photo_from_github(pic_path)
+                        except Exception:
+                            pass
+                            
                     if pic_path and os.path.exists(pic_path):
                         label = QLabel()
                         pixmap = QPixmap(pic_path)
@@ -709,6 +846,12 @@ class AdminMainWindow(QMainWindow):
                     pic_path = eq.get(col_pic)
                     col_target = len(cols) + p_idx # 8, 9번째 열
                     
+                    if pic_path and not os.path.exists(pic_path):
+                        try:
+                            database.download_photo_from_github(pic_path)
+                        except Exception:
+                            pass
+                            
                     if pic_path and os.path.exists(pic_path):
                         label = QLabel()
                         pixmap = QPixmap(pic_path)
@@ -1077,19 +1220,13 @@ class AdminMainWindow(QMainWindow):
             import shutil
             if self.add_photo1_path:
                 p1_dest = os.path.join(PHOTOS_DIR, f"{eq_id}_1.jpg")
-                try:
-                    shutil.copyfile(self.add_photo1_path, p1_dest)
-                    database.upload_photo_to_github(p1_dest)
-                except Exception as e:
-                    print(f"Error copying photo 1: {e}")
+                database.save_and_compress_image(self.add_photo1_path, p1_dest)
+                database.upload_photo_to_github(p1_dest)
                     
             if self.add_photo2_path:
                 p2_dest = os.path.join(PHOTOS_DIR, f"{eq_id}_2.jpg")
-                try:
-                    shutil.copyfile(self.add_photo2_path, p2_dest)
-                    database.upload_photo_to_github(p2_dest)
-                except Exception as e:
-                    print(f"Error copying photo 2: {e}")
+                database.save_and_compress_image(self.add_photo2_path, p2_dest)
+                database.upload_photo_to_github(p2_dest)
                     
             eq_data = {
                 "거래처명": client,
@@ -1177,41 +1314,30 @@ class AdminMainWindow(QMainWindow):
         date_input.setPlaceholderText("예: 2026-06")
         form.addRow("설치년월:", date_input)
         
-        self.edit_photo1_path = eq_data["설비사진1"] or ""
-        self.edit_photo2_path = eq_data["설비사진2"] or ""
-        
-        # 사진 1 영역
+        # 사진 1 영역 (PhotoWidget 적용)
         p1_layout = QHBoxLayout()
-        self.p1_label = QLabel("사진 1 없음")
-        if self.edit_photo1_path and os.path.exists(self.edit_photo1_path):
-            pix = QPixmap(self.edit_photo1_path).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.p1_label.setPixmap(pix)
-        p1_layout.addWidget(self.p1_label)
+        self.p1_widget = PhotoWidget()
+        self.p1_widget.set_photo(eq_data["설비사진1"])
+        p1_layout.addWidget(self.p1_widget)
         btn_p1 = QPushButton("📁 사진 1 변경...")
         def change_p1():
             fname, _ = QFileDialog.getOpenFileName(dialog, "설비 사진 1 선택", "", "Images (*.png *.jpg *.jpeg)")
             if fname:
-                self.edit_photo1_path = fname
-                pix = QPixmap(fname).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                self.p1_label.setPixmap(pix)
+                self.p1_widget.set_photo(fname)
         btn_p1.clicked.connect(change_p1)
         p1_layout.addWidget(btn_p1)
         form.addRow("설비 사진 1:", p1_layout)
         
-        # 사진 2 영역
+        # 사진 2 영역 (PhotoWidget 적용)
         p2_layout = QHBoxLayout()
-        self.p2_label = QLabel("사진 2 없음")
-        if self.edit_photo2_path and os.path.exists(self.edit_photo2_path):
-            pix = QPixmap(self.edit_photo2_path).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.p2_label.setPixmap(pix)
-        p2_layout.addWidget(self.p2_label)
+        self.p2_widget = PhotoWidget()
+        self.p2_widget.set_photo(eq_data["설비사진2"])
+        p2_layout.addWidget(self.p2_widget)
         btn_p2 = QPushButton("📁 사진 2 변경...")
         def change_p2():
             fname, _ = QFileDialog.getOpenFileName(dialog, "설비 사진 2 선택", "", "Images (*.png *.jpg *.jpeg)")
             if fname:
-                self.edit_photo2_path = fname
-                pix = QPixmap(fname).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                self.p2_label.setPixmap(pix)
+                self.p2_widget.set_photo(fname)
         btn_p2.clicked.connect(change_p2)
         p2_layout.addWidget(btn_p2)
         form.addRow("설비 사진 2:", p2_layout)
@@ -1230,28 +1356,35 @@ class AdminMainWindow(QMainWindow):
                 QMessageBox.warning(self, "오류", "필수 입력 항목(거래처, ID, 설비명)을 기입해야 합니다.")
                 return
                 
-            p1_dest = eq_data["설비사진1"] or ""
-            p2_dest = eq_data["설비사진2"] or ""
+            p1_dest = ""
+            p2_dest = ""
             PHOTOS_DIR = "photos"
             if not os.path.exists(PHOTOS_DIR):
                 os.makedirs(PHOTOS_DIR)
                 
             import shutil
-            if self.edit_photo1_path and self.edit_photo1_path != eq_data["설비사진1"]:
+            
+            # 사진 1 저장/삭제/유지 연동
+            photo1_current = self.p1_widget.photo_path
+            if photo1_current == "":
+                p1_dest = "" # 삭제 처리
+            elif photo1_current == eq_data["설비사진1"]:
+                p1_dest = eq_data["설비사진1"] # 변경 없음
+            else:
                 p1_dest = os.path.join(PHOTOS_DIR, f"{new_id}_1.jpg")
-                try:
-                    shutil.copyfile(self.edit_photo1_path, p1_dest)
-                    database.upload_photo_to_github(p1_dest)
-                except Exception as e:
-                    print(f"Error copying photo 1: {e}")
+                database.save_and_compress_image(photo1_current, p1_dest)
+                database.upload_photo_to_github(p1_dest)
                     
-            if self.edit_photo2_path and self.edit_photo2_path != eq_data["설비사진2"]:
+            # 사진 2 저장/삭제/유지 연동
+            photo2_current = self.p2_widget.photo_path
+            if photo2_current == "":
+                p2_dest = "" # 삭제 처리
+            elif photo2_current == eq_data["설비사진2"]:
+                p2_dest = eq_data["설비사진2"] # 변경 없음
+            else:
                 p2_dest = os.path.join(PHOTOS_DIR, f"{new_id}_2.jpg")
-                try:
-                    shutil.copyfile(self.edit_photo2_path, p2_dest)
-                    database.upload_photo_to_github(p2_dest)
-                except Exception as e:
-                    print(f"Error copying photo 2: {e}")
+                database.save_and_compress_image(photo2_current, p2_dest)
+                database.upload_photo_to_github(p2_dest)
             
             updated_eq_data = {
                 "거래처명": client,
@@ -1407,19 +1540,13 @@ class AdminMainWindow(QMainWindow):
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
             if self.add_log_photo1_path:
                 p1_dest = os.path.join(PHOTOS_DIR, f"hist_{eq_id}_{timestamp}_1.jpg")
-                try:
-                    shutil.copyfile(self.add_log_photo1_path, p1_dest)
-                    database.upload_photo_to_github(p1_dest)
-                except Exception as e:
-                    print(f"Error copying photo 1: {e}")
+                database.save_and_compress_image(self.add_log_photo1_path, p1_dest)
+                database.upload_photo_to_github(p1_dest)
                     
             if self.add_log_photo2_path:
                 p2_dest = os.path.join(PHOTOS_DIR, f"hist_{eq_id}_{timestamp}_2.jpg")
-                try:
-                    shutil.copyfile(self.add_log_photo2_path, p2_dest)
-                    database.upload_photo_to_github(p2_dest)
-                except Exception as e:
-                    print(f"Error copying photo 2: {e}")
+                database.save_and_compress_image(self.add_log_photo2_path, p2_dest)
+                database.upload_photo_to_github(p2_dest)
                     
             history_data = {
                 "날짜_시간": date_input.text().strip(),
@@ -1505,41 +1632,30 @@ class AdminMainWindow(QMainWindow):
         cost_input.setText(str(int(log_data["금액"]) if log_data["금액"] is not None else 0))
         form.addRow("수리 비용(원):", cost_input)
         
-        self.edit_log_photo1_path = log_data["사진1"] or ""
-        self.edit_log_photo2_path = log_data["사진2"] or ""
-        
-        # 사진 1 영역
+        # 사진 1 영역 (PhotoWidget 적용)
         p1_layout = QHBoxLayout()
-        self.log_p1_label = QLabel("사진 1 없음")
-        if self.edit_log_photo1_path and os.path.exists(self.edit_log_photo1_path):
-            pix = QPixmap(self.edit_log_photo1_path).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.log_p1_label.setPixmap(pix)
-        p1_layout.addWidget(self.log_p1_label)
+        self.log_p1_widget = PhotoWidget()
+        self.log_p1_widget.set_photo(log_data["사진1"])
+        p1_layout.addWidget(self.log_p1_widget)
         btn_p1 = QPushButton("📁 사진 1 변경...")
         def change_p1():
             fname, _ = QFileDialog.getOpenFileName(dialog, "점검 사진 1 선택", "", "Images (*.png *.jpg *.jpeg)")
             if fname:
-                self.edit_log_photo1_path = fname
-                pix = QPixmap(fname).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                self.log_p1_label.setPixmap(pix)
+                self.log_p1_widget.set_photo(fname)
         btn_p1.clicked.connect(change_p1)
         p1_layout.addWidget(btn_p1)
         form.addRow("점검 사진 1:", p1_layout)
         
-        # 사진 2 영역
+        # 사진 2 영역 (PhotoWidget 적용)
         p2_layout = QHBoxLayout()
-        self.log_p2_label = QLabel("사진 2 없음")
-        if self.edit_log_photo2_path and os.path.exists(self.edit_log_photo2_path):
-            pix = QPixmap(self.edit_log_photo2_path).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.log_p2_label.setPixmap(pix)
-        p2_layout.addWidget(self.log_p2_label)
+        self.log_p2_widget = PhotoWidget()
+        self.log_p2_widget.set_photo(log_data["사진2"])
+        p2_layout.addWidget(self.log_p2_widget)
         btn_p2 = QPushButton("📁 사진 2 변경...")
         def change_p2():
             fname, _ = QFileDialog.getOpenFileName(dialog, "점검 사진 2 선택", "", "Images (*.png *.jpg *.jpeg)")
             if fname:
-                self.edit_log_photo2_path = fname
-                pix = QPixmap(fname).scaled(100, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                self.log_p2_label.setPixmap(pix)
+                self.log_p2_widget.set_photo(fname)
         btn_p2.clicked.connect(change_p2)
         p2_layout.addWidget(btn_p2)
         form.addRow("점검 사진 2:", p2_layout)
@@ -1563,29 +1679,36 @@ class AdminMainWindow(QMainWindow):
             except ValueError:
                 cost = 0.0
                 
-            p1_dest = log_data["사진1"] or ""
-            p2_dest = log_data["사진2"] or ""
+            p1_dest = ""
+            p2_dest = ""
             PHOTOS_DIR = "photos"
             if not os.path.exists(PHOTOS_DIR):
                 os.makedirs(PHOTOS_DIR)
                 
             import shutil
             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-            if self.edit_log_photo1_path and self.edit_log_photo1_path != log_data["사진1"]:
+            
+            # 사진 1 저장/삭제/유지 연동
+            photo1_current = self.log_p1_widget.photo_path
+            if photo1_current == "":
+                p1_dest = "" # 삭제 처리
+            elif photo1_current == log_data["사진1"]:
+                p1_dest = log_data["사진1"] # 변경 없음
+            else:
                 p1_dest = os.path.join(PHOTOS_DIR, f"hist_{eq_id}_{timestamp}_1.jpg")
-                try:
-                    shutil.copyfile(self.edit_log_photo1_path, p1_dest)
-                    database.upload_photo_to_github(p1_dest)
-                except Exception as e:
-                    print(f"Error copying photo 1: {e}")
+                database.save_and_compress_image(photo1_current, p1_dest)
+                database.upload_photo_to_github(p1_dest)
                     
-            if self.edit_log_photo2_path and self.edit_log_photo2_path != log_data["사진2"]:
+            # 사진 2 저장/삭제/유지 연동
+            photo2_current = self.log_p2_widget.photo_path
+            if photo2_current == "":
+                p2_dest = "" # 삭제 처리
+            elif photo2_current == log_data["사진2"]:
+                p2_dest = log_data["사진2"] # 변경 없음
+            else:
                 p2_dest = os.path.join(PHOTOS_DIR, f"hist_{eq_id}_{timestamp}_2.jpg")
-                try:
-                    shutil.copyfile(self.edit_log_photo2_path, p2_dest)
-                    database.upload_photo_to_github(p2_dest)
-                except Exception as e:
-                    print(f"Error copying photo 2: {e}")
+                database.save_and_compress_image(photo2_current, p2_dest)
+                database.upload_photo_to_github(p2_dest)
             
             updated_data = {
                 "날짜_시간": date_input.text().strip(),
@@ -1662,18 +1785,23 @@ class AdminMainWindow(QMainWindow):
         pass
 
     def auto_pull_db(self):
-        """프로그램 시작 시 GitHub에서 최신 DB 파일을 받아옵니다."""
-        print("Starting auto pull from GitHub...")
-        success = database.sync_pull_from_github()
-        if success:
-            print("Auto pull from GitHub succeeded.")
-        else:
-            print("Auto pull from GitHub failed. Using local database.")
-        self.load_all_data()
+        """프로그램 시작 시 GitHub에서 최신 DB 파일을 백그라운드 스레드에서 받아옵니다."""
+        print("Starting auto pull from GitHub (Background Thread)...")
         
-        # 로컬에 있지만 깃허브에 누락된 사진이 있다면 백그라운드로 자동 동기화 업로드
+        def run_sync():
+            success = database.sync_pull_from_github()
+            if success:
+                print("Auto pull from GitHub succeeded.")
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(0, self.load_all_data)
+            else:
+                print("Auto pull from GitHub failed. Using local database.")
+                
+            # 로컬에 있지만 깃허브에 누락된 사진이 있다면 백그라운드로 자동 동기화 업로드
+            database.sync_local_photos_to_github()
+
         import threading
-        threading.Thread(target=database.sync_local_photos_to_github, daemon=True).start()
+        threading.Thread(target=run_sync, daemon=True).start()
 
     # =========================================================================
     # 🖨️ 보고서 생성 및 출력 모듈 (바탕화면 자동 출력)
@@ -1708,10 +1836,40 @@ class AdminMainWindow(QMainWindow):
         return filtered
 
     def get_desktop_path(self):
-        # PC 사용자 바탕화면 경로 탐색
-        return os.path.join(os.path.expanduser("~"), "Desktop")
+        # PC 사용자 바탕화면 경로 탐색 (한글 윈도우 및 OneDrive 동기화 대응)
+        home = os.path.expanduser("~")
+        
+        # 1. 윈도우 레지스트리를 통한 실제 바탕화면 경로 획득 시도
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders")
+            desktop_path, _ = winreg.QueryValueEx(key, "Desktop")
+            winreg.CloseKey(key)
+            desktop_path = os.path.expandvars(desktop_path)
+            if os.path.exists(desktop_path):
+                return desktop_path
+        except Exception:
+            pass
+
+        # 2. 대표적인 바탕화면 후보들 순차 검사
+        candidates = [
+            os.path.join(home, "Desktop"),
+            os.path.join(home, "바탕 화면"),
+            os.path.join(home, "OneDrive", "Desktop"),
+            os.path.join(home, "OneDrive", "바탕 화면"),
+            os.path.join(home, "OneDrive - 개인", "Desktop"),
+            os.path.join(home, "OneDrive - 개인", "바탕 화면"),
+        ]
+        
+        for path in candidates:
+            if os.path.exists(path):
+                return path
+                
+        # 3. 만약 어떤 바탕화면도 존재하지 않는다면 안전하게 현재 실행 디렉토리 리턴
+        return os.getcwd()
 
     def export_excel_report(self):
+        import pandas as pd
         histories = self.get_filtered_history_data()
         if not histories:
             QMessageBox.warning(self, "경고", "해당 조건에 부합하는 수리점검 내역 데이터가 없어 보고서를 생성할 수 없습니다.")
@@ -1786,6 +1944,7 @@ class AdminMainWindow(QMainWindow):
             QMessageBox.critical(self, "출력 실패", f"엑셀 보고서 생성 오류: {e}")
 
     def export_pdf_report(self):
+        from fpdf import FPDF
         histories = self.get_filtered_history_data()
         if not histories:
             QMessageBox.warning(self, "경고", "해당 조건에 부합하는 수리점검 내역 데이터가 없어 보고서를 생성할 수 없습니다.")
@@ -1863,7 +2022,23 @@ class AdminMainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "출력 실패", f"PDF 보고서 생성 오류: {e}")
 
+import traceback
+
+def exception_hook(exctype, value, tb):
+    err_msg = "".join(traceback.format_exception(exctype, value, tb))
+    print(err_msg, file=sys.stderr)
+    try:
+        with open("error_log_pc.txt", "a", encoding="utf-8") as f:
+            f.write(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}]\n{err_msg}\n{'-'*50}\n")
+    except Exception:
+        pass
+    try:
+        QMessageBox.critical(None, "오류 발생", f"프로그램 실행 중 오류가 발생했습니다.\n\n오류 내용:\n{value}\n\n상세 정보가 error_log_pc.txt 파일에 기록되었습니다.")
+    except Exception:
+        pass
+
 if __name__ == "__main__":
+    sys.excepthook = exception_hook
     app = QApplication(sys.argv)
     window = AdminMainWindow()
     window.show()
