@@ -837,12 +837,11 @@ else:
             st.rerun()
             
     with col_top_btns[1]:
-        if st.button("🔧 계기등록 및 관리", key="new_eq_toggle_btn"):
-            st.session_state.new_eq_form_open = not st.session_state.new_eq_form_open
-            if not st.session_state.new_eq_form_open:
-                st.session_state.mgmt_sub_menu = None
-            sync_query_params()
-            st.rerun()
+        if not st.session_state.new_eq_form_open:
+            if st.button("🔧 계기등록 및 관리", key="new_eq_toggle_btn"):
+                st.session_state.new_eq_form_open = True
+                sync_query_params()
+                st.rerun()
             
     st.write("") # 작은 공백 여백
     
