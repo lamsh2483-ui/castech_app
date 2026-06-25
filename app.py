@@ -1166,18 +1166,23 @@ else:
             # 전체 계기 목록 가져오기
             eq_list = database.get_equipments(st.session_state.selected_client)
             
-            # 1. 검색 입력창 배치
-            st.markdown('<div class="search-row-marker" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;"></div>', unsafe_allow_html=True)
-            search_input = st.text_input(
-                "검색할 계기 ID 또는 계기명을 입력하세요",
-                value=st.session_state.search_query,
-                placeholder="문자나 숫자를 입력하세요 (빈칸 검색 시 전체 표시)",
-                label_visibility="collapsed",
-                key="eq_search_input"
-            )
-            search_query_stripped = search_input.strip()
+            # 1. 검색 입력창 및 검색 버튼 한 줄 배치 (폭을 줄여 검색창 3, 버튼 1 비율로 설정)
+            col_search_input, col_search_btn = st.columns([3, 1])
+            with col_search_input:
+                st.markdown('<div class="search-row-marker" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;"></div>', unsafe_allow_html=True)
+                search_input = st.text_input(
+                    "검색할 계기 ID 또는 계기명을 입력하세요",
+                    value=st.session_state.search_query,
+                    placeholder="문자나 숫자를 입력하세요 (빈칸 검색 시 전체 표시)",
+                    label_visibility="collapsed",
+                    key="eq_search_input"
+                )
+                search_query_stripped = search_input.strip()
 
-            # 사용자가 검색 입력란을 수정하면 세션 상태 갱신 (불필요한 재실행을 유발하지 않음)
+            with col_search_btn:
+                confirm_search = st.button("🔍 검색", key="confirm_search_btn", use_container_width=True)
+
+            # 사용자가 검색 입력란을 수정하면 세션 상태 갱신
             if search_query_stripped != st.session_state.search_query:
                 st.session_state.search_query = search_query_stripped
                 st.session_state.last_search_query = search_query_stripped
@@ -1204,9 +1209,6 @@ else:
                 else:
                     st.warning("⚠️ 검색어와 일치하는 계기가 없습니다. 다시 입력해 주세요.")
             
-            # 3. 검색 버튼 (모바일 화면 대응을 위해 단독 버튼으로 구성)
-            confirm_search = st.button("🔍 검색", key="confirm_search_btn", use_container_width=True)
-            
             if confirm_search:
                 try:
                     database.sync_pull_from_github()
@@ -1220,12 +1222,20 @@ else:
                     st.session_state.search_result_eq_id = None
                     st.session_state.search_query = ""
                     st.session_state.last_search_query = ""
+                    # 쿼리 파라미터 즉시 삭제하여 handle_navigation_sync로 인한 덮어쓰기 방지
+                    if "q" in st.query_params:
+                        del st.query_params["q"]
+                    if "eq_id" in st.query_params:
+                        del st.query_params["eq_id"]
                     st.rerun()
                 # 입력창에 문자가 있고 드롭다운에서 선택한 경우
                 else:
                     if dropdown_selected_eq_id:
                         st.session_state.selected_eq_id = dropdown_selected_eq_id
                         st.session_state.search_result_eq_id = dropdown_selected_eq_id
+                        # 쿼리 파라미터 즉시 업데이트하여 handle_navigation_sync로 인한 덮어쓰기 방지
+                        st.query_params["q"] = search_query_stripped
+                        st.query_params["eq_id"] = dropdown_selected_eq_id
                         st.rerun()
                 
             # 4. 검색 이력에 따라 매칭되는 데이터를 나열 형태로 표시
@@ -1254,6 +1264,8 @@ else:
                         if st.button(btn_label, key=f"btn_list_select_{eq['설비ID']}", use_container_width=True):
                             st.session_state.selected_eq_id = eq["설비ID"]
                             st.session_state.search_result_eq_id = eq["설비ID"]
+                            # 쿼리 파라미터 즉시 업데이트하여 handle_navigation_sync로 인한 덮어쓰기 방지
+                            st.query_params["eq_id"] = eq["설비ID"]
                             st.rerun()
                 else:
                     if len(st.session_state.search_query) > 0:
