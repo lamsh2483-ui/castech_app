@@ -1186,28 +1186,6 @@ else:
             if search_query_stripped != st.session_state.search_query:
                 st.session_state.search_query = search_query_stripped
                 st.session_state.last_search_query = search_query_stripped
-
-            dropdown_selected_eq_id = None
-            
-            # 2. 입력창에 문자나 숫자를 1개이상 입력했을 때 하단에 드롭다운 표시 (사용자 글로벌 룰 반영)
-            if len(search_query_stripped) >= 1:
-                matching_eqs_for_dropdown = [
-                    eq for eq in eq_list
-                    if search_query_stripped.lower() in eq["설비ID"].lower() or search_query_stripped.lower() in eq["설비명"].lower()
-                ]
-                
-                if matching_eqs_for_dropdown:
-                    eq_options = [f"[{eq['설비ID']}] {eq['설비명']} ({eq['설치위치'] or '위치 미지정'})" for eq in matching_eqs_for_dropdown]
-                    selected_option = st.selectbox(
-                        "검색된 계기 선택",
-                        options=eq_options,
-                        key="search_dropdown_select"
-                    )
-                    if selected_option:
-                        sel_idx = eq_options.index(selected_option)
-                        dropdown_selected_eq_id = matching_eqs_for_dropdown[sel_idx]["설비ID"]
-                else:
-                    st.warning("⚠️ 검색어와 일치하는 계기가 없습니다. 다시 입력해 주세요.")
             
             if confirm_search:
                 try:
@@ -1216,38 +1194,32 @@ else:
                     pass
                 st.session_state.search_performed = True
                 
-                # 입력창이 빈 상태로 검색버튼 누르면 전체데이터 표시
+                # 검색 버튼을 새로 누르면 기존의 상세 정보 선택 상태는 닫습니다
+                st.session_state.selected_eq_id = None
+                st.session_state.search_result_eq_id = None
+                
+                # 쿼리 파라미터 즉시 동기화 (새로고침/뒤로가기 초기화 방지)
                 if len(search_query_stripped) == 0:
-                    st.session_state.selected_eq_id = None
-                    st.session_state.search_result_eq_id = None
-                    st.session_state.search_query = ""
-                    st.session_state.last_search_query = ""
-                    # 쿼리 파라미터 즉시 삭제하여 handle_navigation_sync로 인한 덮어쓰기 방지
                     if "q" in st.query_params:
                         del st.query_params["q"]
                     if "eq_id" in st.query_params:
                         del st.query_params["eq_id"]
-                    st.rerun()
-                # 입력창에 문자가 있고 드롭다운에서 선택한 경우
                 else:
-                    if dropdown_selected_eq_id:
-                        st.session_state.selected_eq_id = dropdown_selected_eq_id
-                        st.session_state.search_result_eq_id = dropdown_selected_eq_id
-                        # 쿼리 파라미터 즉시 업데이트하여 handle_navigation_sync로 인한 덮어쓰기 방지
-                        st.query_params["q"] = search_query_stripped
-                        st.query_params["eq_id"] = dropdown_selected_eq_id
-                        st.rerun()
+                    st.query_params["q"] = search_query_stripped
+                    if "eq_id" in st.query_params:
+                        del st.query_params["eq_id"]
+                st.rerun()
                 
-            # 4. 검색 이력에 따라 매칭되는 데이터를 나열 형태로 표시
+            # 2. 검색 이력에 따라 매칭되는 데이터를 리스트(터치식 버튼 목록) 형태로 표시 (selectbox 드롭다운 제거 및 리스트 형태 롤백)
             if st.session_state.get("search_performed", False):
-                # 검색어가 비어 있으면 전체, 있으면 선택된 특정 데이터만 노출
+                # 검색어가 비어 있으면 전체, 있으면 필터링하여 나열
                 if len(st.session_state.search_query) == 0:
                     matching_eqs = eq_list
                 else:
-                    if st.session_state.selected_eq_id:
-                        matching_eqs = [eq for eq in eq_list if eq["설비ID"] == st.session_state.selected_eq_id]
-                    else:
-                        matching_eqs = []
+                    matching_eqs = [
+                        eq for eq in eq_list
+                        if st.session_state.search_query.lower() in eq["설비ID"].lower() or st.session_state.search_query.lower() in eq["설비명"].lower()
+                    ]
                 
                 if matching_eqs:
                     st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
