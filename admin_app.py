@@ -52,6 +52,36 @@ class ThemeColors:
     TABLE_GRID = "#e2e8f0"        # 테이블 그리드 라인 색상 (Slate 200)
     SPLITTER_HANDLE = "#cbd5e1"   # 스플리터 핸들 색상 (Slate 300)
 
+class ClickableImageLabel(QLabel):
+    def __init__(self, photo_path, parent=None):
+        super().__init__(parent)
+        self.photo_path = photo_path
+        self.setCursor(Qt.PointingHandCursor)
+        
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton and self.photo_path and os.path.exists(self.photo_path):
+            self.show_large_image()
+        super().mousePressEvent(event)
+        
+    def show_large_image(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("사진 크게 보기")
+        dialog.setMinimumSize(400, 300)
+        
+        layout = QVBoxLayout(dialog)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        img_label = QLabel(dialog)
+        pix = QPixmap(self.photo_path)
+        if not pix.isNull():
+            scaled_pix = pix.scaled(800, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            img_label.setPixmap(scaled_pix)
+            img_label.setAlignment(Qt.AlignCenter)
+            layout.addWidget(img_label)
+            
+        dialog.setLayout(layout)
+        dialog.exec()
+
 class PhotoWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -764,7 +794,7 @@ class AdminMainWindow(QMainWindow):
                             pass
                             
                     if pic_path and os.path.exists(pic_path):
-                        label = QLabel()
+                        label = ClickableImageLabel(pic_path)
                         pixmap = QPixmap(pic_path)
                         if not pixmap.isNull():
                             # 썸네일 생성 및 QLabel 세팅
@@ -853,7 +883,7 @@ class AdminMainWindow(QMainWindow):
                             pass
                             
                     if pic_path and os.path.exists(pic_path):
-                        label = QLabel()
+                        label = ClickableImageLabel(pic_path)
                         pixmap = QPixmap(pic_path)
                         if not pixmap.isNull():
                             scaled_pix = pixmap.scaled(60, 45, Qt.KeepAspectRatio, Qt.SmoothTransformation)
