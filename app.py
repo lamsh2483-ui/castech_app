@@ -10,6 +10,10 @@ import database
 import urllib.parse
 from fpdf import FPDF
 
+@st.dialog("사진 크게 보기", width="large")
+def show_large_image(image_path):
+    st.image(image_path, use_container_width=True)
+
 # PDF 보고서 생성 헬퍼 함수 정의
 def generate_pdf_report(client_name, start_date_str, end_date_str, selected_eq_str, histories):
     pdf = FPDF()
@@ -590,17 +594,23 @@ if "search_performed" not in st.session_state:
     st.session_state.search_performed = False
 if "sync_logs" not in st.session_state:
     st.session_state.sync_logs = []
-if "query_params_loaded" not in st.session_state:
-    st.session_state.query_params_loaded = False
-
-# 1-1. URL 쿼리 파라미터 처리 (HTML A 태그 클릭 대응 - 로그인 복구 기능 포함 - 최초 1회만 실행)
-if not st.session_state.query_params_loaded:
-    if "worker" in st.query_params and not st.session_state.authenticated:
+# URL 쿼리 파라미터와 st.session_state 간의 실시간 양방향 내비게이션 동기화 처리 (스마트폰 뒤로가기 완벽 연동)
+def handle_navigation_sync():
+    # 1. 로그인 상태 복구 및 연동
+    url_worker = st.query_params.get("worker")
+    if url_worker and not st.session_state.authenticated:
         st.session_state.authenticated = True
-        st.session_state.login_worker = st.query_params["worker"]
-    
-    if "client" in st.query_params and st.session_state.selected_client != st.query_params["client"]:
-        st.session_state.selected_client = st.query_params["client"]
+        st.session_state.login_worker = url_worker
+        st.rerun()
+    elif not url_worker and st.session_state.authenticated:
+        st.session_state.authenticated = False
+        st.session_state.login_worker = None
+        st.rerun()
+        
+    # 2. 거래처 선택 상태 동기화 (뒤로가기 시 client 해제 감지)
+    url_client = st.query_params.get("client")
+    if url_client != st.session_state.selected_client:
+        st.session_state.selected_client = url_client
         st.session_state.selected_eq_id = None
         st.session_state.search_filter_id = None
         st.session_state.show_all = True
@@ -609,26 +619,32 @@ if not st.session_state.query_params_loaded:
         st.session_state.search_query = ""
         st.session_state.last_search_query = ""
         st.session_state.search_performed = False
-    
-    # 1-2. URL 쿼리 파라미터 처리 (검색어 복구)
-    if "q" in st.query_params:
-        st.session_state.search_query = st.query_params["q"]
-        st.session_state.last_search_query = st.query_params["q"]
-        st.session_state.search_performed = True
-    
-    # 1-3. URL 쿼리 파라미터 처리 (설비 ID 복구)
-    if "eq_id" in st.query_params and st.session_state.selected_eq_id != st.query_params["eq_id"]:
-        st.session_state.selected_eq_id = st.query_params["eq_id"]
-        st.session_state.search_result_eq_id = st.query_params["eq_id"]
-    
-    if "menu" in st.query_params:
-        if st.session_state.mgmt_sub_menu != st.query_params["menu"]:
-            st.session_state.mgmt_sub_menu = st.query_params["menu"]
-            st.session_state.new_eq_form_open = True
-            
-    st.session_state.query_params_loaded = True
+        st.rerun()
+        
+    # 3. 설비 ID 선택 상태 동기화 (뒤로가기 시 eq_id 해제 감지)
+    url_eq_id = st.query_params.get("eq_id")
+    if url_eq_id != st.session_state.selected_eq_id:
+        st.session_state.selected_eq_id = url_eq_id
+        st.session_state.search_result_eq_id = url_eq_id
+        st.rerun()
+        
+    # 4. 메뉴 상태 동기화
+    url_menu = st.query_params.get("menu")
+    if url_menu != st.session_state.mgmt_sub_menu:
+        st.session_state.mgmt_sub_menu = url_menu
+        st.session_state.new_eq_form_open = bool(url_menu)
+        st.rerun()
+        
+    # 5. 검색어 동기화
+    url_q = st.query_params.get("q")
+    if url_q != st.session_state.search_query:
+        st.session_state.search_query = url_q or ""
+        st.session_state.last_search_query = url_q or ""
+        st.session_state.search_performed = bool(url_q)
+        st.rerun()
 
-# 파라미터 로딩 완료 후 실시간으로 쿼리 파라미터 싱크
+# 내비게이션 싱크 실행 및 파라미터 실시간 업데이트
+handle_navigation_sync()
 sync_query_params()
 
 # --- 콜백 함수 정의 ---
@@ -905,13 +921,11 @@ else:
                             p2_path = ""
                             if photo1:
                                 p1_path = os.path.join(PHOTOS_DIR, f"{new_id}_1.jpg")
-                                with open(p1_path, "wb") as f:
-                                    f.write(photo1.getbuffer())
+                                database.save_and_compress_image(photo1, p1_path)
                                 database.upload_photo_to_github(p1_path)
                             if photo2:
                                 p2_path = os.path.join(PHOTOS_DIR, f"{new_id}_2.jpg")
-                                with open(p2_path, "wb") as f:
-                                    f.write(photo2.getbuffer())
+                                database.save_and_compress_image(photo2, p2_path)
                                 database.upload_photo_to_github(p2_path)
                                     
                             eq_data = {
@@ -970,6 +984,8 @@ else:
                                 database.download_photo_from_github(p1_path)
                             if p1_path and os.path.exists(p1_path):
                                 st.image(p1_path, caption="설비사진 1", use_container_width=True)
+                                if st.button("🔍 크게 보기", key="zoom_detail_p1"):
+                                    show_large_image(p1_path)
                             else:
                                 st.caption("등록된 사진 1 없음")
                         with col_pic2:
@@ -977,6 +993,8 @@ else:
                                 database.download_photo_from_github(p2_path)
                             if p2_path and os.path.exists(p2_path):
                                 st.image(p2_path, caption="설비사진 2", use_container_width=True)
+                                if st.button("🔍 크게 보기", key="zoom_detail_p2"):
+                                    show_large_image(p2_path)
                             else:
                                 st.caption("등록된 사진 2 없음")
                                 
@@ -993,13 +1011,11 @@ else:
                                 p2_path = eq_data["설비사진2"] or ""
                                 if edit_photo1:
                                     p1_path = os.path.join(PHOTOS_DIR, f"{edit_id}_1.jpg")
-                                    with open(p1_path, "wb") as f:
-                                        f.write(edit_photo1.getbuffer())
+                                    database.save_and_compress_image(edit_photo1, p1_path)
                                     database.upload_photo_to_github(p1_path)
                                 if edit_photo2:
                                     p2_path = os.path.join(PHOTOS_DIR, f"{edit_id}_2.jpg")
-                                    with open(p2_path, "wb") as f:
-                                        f.write(edit_photo2.getbuffer())
+                                    database.save_and_compress_image(edit_photo2, p2_path)
                                     database.upload_photo_to_github(p2_path)
                                         
                                 updated_eq_data = {
@@ -1294,13 +1310,11 @@ else:
                                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                                 if hist_photo1:
                                     hp1_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_1.jpg")
-                                    with open(hp1_path, "wb") as f:
-                                        f.write(hist_photo1.getbuffer())
+                                    database.save_and_compress_image(hist_photo1, hp1_path)
                                     database.upload_photo_to_github(hp1_path)
                                 if hist_photo2:
                                     hp2_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_2.jpg")
-                                    with open(hp2_path, "wb") as f:
-                                        f.write(hist_photo2.getbuffer())
+                                    database.save_and_compress_image(hist_photo2, hp2_path)
                                     database.upload_photo_to_github(hp2_path)
                                         
                                 hist_data = {
@@ -1355,9 +1369,13 @@ else:
                                     if h_pic1 and os.path.exists(h_pic1):
                                         with col_pic1:
                                             st.image(h_pic1, caption="조치 사진1", use_container_width=True)
+                                            if st.button("🔍 크게 보기", key=f"zoom_hist_p1_{item['id']}"):
+                                                show_large_image(h_pic1)
                                     if h_pic2 and os.path.exists(h_pic2):
                                         with col_pic2:
                                             st.image(h_pic2, caption="조치 사진2", use_container_width=True)
+                                            if st.button("🔍 크게 보기", key=f"zoom_hist_p2_{item['id']}"):
+                                                show_large_image(h_pic2)
                                             
                                 # 내역 하단에 수정 가능한 입력폼 바로 제공 (수정하기 버튼 삭제)
                                 st.markdown("---")
@@ -1404,13 +1422,11 @@ else:
                                             timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
                                             if edit_photo1:
                                                 hp1_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_1.jpg")
-                                                with open(hp1_path, "wb") as f:
-                                                    f.write(edit_photo1.getbuffer())
+                                                database.save_and_compress_image(edit_photo1, hp1_path)
                                                 database.upload_photo_to_github(hp1_path)
                                             if edit_photo2:
                                                 hp2_path = os.path.join(PHOTOS_DIR, f"hist_{st.session_state.selected_eq_id}_{timestamp}_2.jpg")
-                                                with open(hp2_path, "wb") as f:
-                                                    f.write(edit_photo2.getbuffer())
+                                                database.save_and_compress_image(edit_photo2, hp2_path)
                                                 database.upload_photo_to_github(hp2_path)
                                                     
                                             updated_data = {
