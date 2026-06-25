@@ -1166,26 +1166,46 @@ else:
             # 전체 계기 목록 가져오기
             eq_list = database.get_equipments(st.session_state.selected_client)
             
-            # 1. 검색 입력창 및 검색 버튼 (한 줄에 배치)
-            col_search_input, col_search_btn = st.columns([4, 1])
-            with col_search_input:
-                st.markdown('<div class="search-row-marker" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;"></div>', unsafe_allow_html=True)
-                search_input = st.text_input(
-                    "검색할 계기 ID 또는 계기명을 입력하세요",
-                    value=st.session_state.search_query,
-                    placeholder="문자나 숫자를 입력하고 검색을 누르세요 (빈칸 검색 시 전체 표시)",
-                    label_visibility="collapsed",
-                    key="eq_search_input"
-                )
-                search_query_stripped = search_input.strip()
+            # 1. 검색 입력창 배치
+            st.markdown('<div class="search-row-marker" style="position: absolute; width: 0; height: 0; opacity: 0; pointer-events: none;"></div>', unsafe_allow_html=True)
+            search_input = st.text_input(
+                "검색할 계기 ID 또는 계기명을 입력하세요",
+                value=st.session_state.search_query,
+                placeholder="문자나 숫자를 입력하세요 (빈칸 검색 시 전체 표시)",
+                label_visibility="collapsed",
+                key="eq_search_input"
+            )
+            search_query_stripped = search_input.strip()
 
-            # 사용자가 검색 입력란을 수정하면 검색 이력 초기화
-            if search_query_stripped != st.session_state.last_search_query:
-                st.session_state.last_search_query = search_query_stripped
+            # 사용자가 검색 입력란을 수정하면 세션 상태 갱신 (불필요한 재실행을 유발하지 않음)
+            if search_query_stripped != st.session_state.search_query:
                 st.session_state.search_query = search_query_stripped
+                st.session_state.last_search_query = search_query_stripped
+
+            dropdown_selected_eq_id = None
+            
+            # 2. 입력창에 문자나 숫자를 1개이상 입력했을 때 하단에 드롭다운 표시 (사용자 글로벌 룰 반영)
+            if len(search_query_stripped) >= 1:
+                matching_eqs_for_dropdown = [
+                    eq for eq in eq_list
+                    if search_query_stripped.lower() in eq["설비ID"].lower() or search_query_stripped.lower() in eq["설비명"].lower()
+                ]
                 
-            with col_search_btn:
-                confirm_search = st.button("🔍 검색", key="confirm_search_btn")
+                if matching_eqs_for_dropdown:
+                    eq_options = [f"[{eq['설비ID']}] {eq['설비명']} ({eq['설치위치'] or '위치 미지정'})" for eq in matching_eqs_for_dropdown]
+                    selected_option = st.selectbox(
+                        "검색된 계기 선택",
+                        options=eq_options,
+                        key="search_dropdown_select"
+                    )
+                    if selected_option:
+                        sel_idx = eq_options.index(selected_option)
+                        dropdown_selected_eq_id = matching_eqs_for_dropdown[sel_idx]["설비ID"]
+                else:
+                    st.warning("⚠️ 검색어와 일치하는 계기가 없습니다. 다시 입력해 주세요.")
+            
+            # 3. 검색 버튼 (모바일 화면 대응을 위해 단독 버튼으로 구성)
+            confirm_search = st.button("🔍 검색", key="confirm_search_btn", use_container_width=True)
             
             if confirm_search:
                 try:
@@ -1193,23 +1213,31 @@ else:
                 except Exception:
                     pass
                 st.session_state.search_performed = True
-                st.session_state.search_query = search_query_stripped
-                st.session_state.last_search_query = search_query_stripped
-                # 검색 버튼을 누르면 기존 상세 정보는 닫는다 (터치하여 선택하기 위함)
-                st.session_state.selected_eq_id = None
-                st.session_state.search_result_eq_id = None
-                st.rerun()
                 
-            # 2. 검색 이력에 따라 매칭되는 데이터를 나열 형태로 표시
-            if st.session_state.get("search_performed", False):
-                # 검색어가 비어 있으면 전체, 있으면 필터링
-                if len(st.session_state.search_query) >= 1:
-                    matching_eqs = [
-                        eq for eq in eq_list
-                        if st.session_state.search_query.lower() in eq["설비ID"].lower() or st.session_state.search_query.lower() in eq["설비명"].lower()
-                    ]
+                # 입력창이 빈 상태로 검색버튼 누르면 전체데이터 표시
+                if len(search_query_stripped) == 0:
+                    st.session_state.selected_eq_id = None
+                    st.session_state.search_result_eq_id = None
+                    st.session_state.search_query = ""
+                    st.session_state.last_search_query = ""
+                    st.rerun()
+                # 입력창에 문자가 있고 드롭다운에서 선택한 경우
                 else:
+                    if dropdown_selected_eq_id:
+                        st.session_state.selected_eq_id = dropdown_selected_eq_id
+                        st.session_state.search_result_eq_id = dropdown_selected_eq_id
+                        st.rerun()
+                
+            # 4. 검색 이력에 따라 매칭되는 데이터를 나열 형태로 표시
+            if st.session_state.get("search_performed", False):
+                # 검색어가 비어 있으면 전체, 있으면 선택된 특정 데이터만 노출
+                if len(st.session_state.search_query) == 0:
                     matching_eqs = eq_list
+                else:
+                    if st.session_state.selected_eq_id:
+                        matching_eqs = [eq for eq in eq_list if eq["설비ID"] == st.session_state.selected_eq_id]
+                    else:
+                        matching_eqs = []
                 
                 if matching_eqs:
                     st.markdown('<div style="height: 10px;"></div>', unsafe_allow_html=True)
@@ -1217,7 +1245,7 @@ else:
                     st.write("아래에서 계기를 터치(클릭)하면 상세 정보와 등록 폼이 활성화됩니다:")
                     
                     for eq in matching_eqs:
-                        # 현재 선택된 계기 표시 (활성 상태일 시 🎯 아이콘 및 강조 스타일 제공)
+                        # 현재 선택된 계기 표시 (🎯 아이콘 및 강조 스타일)
                         is_selected = (eq["설비ID"] == st.session_state.selected_eq_id)
                         btn_prefix = "🎯 " if is_selected else "⚙️ "
                         btn_label = f"{btn_prefix}[{eq['설비ID']}] {eq['설비명']} ({eq['설치위치'] or '위치 미지정'})"
@@ -1228,7 +1256,8 @@ else:
                             st.session_state.search_result_eq_id = eq["설비ID"]
                             st.rerun()
                 else:
-                    st.warning("⚠️ 검색어와 일치하는 계기가 없습니다. 다시 검색해 주세요.")
+                    if len(st.session_state.search_query) > 0:
+                        st.warning("⚠️ 검색어와 일치하는 계기가 없습니다. 다시 검색해 주세요.")
         
     # 9-3. 점검 폼 및 이력 영역 (우측 컬럼)
     with col_form:
