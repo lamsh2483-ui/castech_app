@@ -1271,10 +1271,17 @@ else:
                         database.download_photo_from_github(p1_path)
                     if p2_path:
                         database.download_photo_from_github(p2_path)
-                    if p1_path and os.path.exists(p1_path):
-                        st.image(p1_path, caption="설비사진 1", use_container_width=True)
-                    if p2_path and os.path.exists(p2_path):
-                        st.image(p2_path, caption="설비사진 2", use_container_width=True)
+                        
+                    # 사진 노출 크기를 썸네일 크기로 대폭 줄이고 가로로 나란히 배치 (클릭 시 확대 가능)
+                    if (p1_path and os.path.exists(p1_path)) or (p2_path and os.path.exists(p2_path)):
+                        st.write("**설비 사진 (터치하면 확대됩니다):**")
+                        col_pic1, col_pic2 = st.columns(2)
+                        with col_pic1:
+                            if p1_path and os.path.exists(p1_path):
+                                st.image(p1_path, caption="설비사진 1", width=120)
+                        with col_pic2:
+                            if p2_path and os.path.exists(p2_path):
+                                st.image(p2_path, caption="설비사진 2", width=120)
                 
                 # 점검/수리 등록 폼
                 form_title = "➕ 점검 기록 등록"
