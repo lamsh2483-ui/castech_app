@@ -978,7 +978,8 @@ else:
                         edit_fmt = st.text_input("형식", value=eq_data["형식"] or "")
                         edit_date = st.text_input("설치년월", value=eq_data["설치년월"] or "")
                         
-                        col_pic1, col_pic2 = st.columns(2)
+                        # 썸네일 크기로 보여주고 터치시 확대 지원하기 위해 컬럼 비율 조절 (use_container_width=True가 라이트박스 원본 확대를 지원함)
+                        col_pic1, col_pic2, col_pic_space = st.columns([1.2, 1.2, 2.6])
                         p1_path = eq_data["설비사진1"]
                         p2_path = eq_data["설비사진2"]
                         if p1_path and isinstance(p1_path, str):
@@ -990,16 +991,14 @@ else:
                             if p1_path:
                                 database.download_photo_from_github(p1_path)
                             if p1_path and os.path.exists(p1_path):
-                                # 썸네일 크기로 보여주고 터치시 확대 지원 (use_container_width 대신 width 사용 및 form 내 에러 버튼 제거)
-                                st.image(p1_path, caption="설비사진 1 (터치시 확대)", width=120)
+                                st.image(p1_path, caption="설비사진 1 (터치시 확대)", use_container_width=True)
                             else:
                                 st.caption("등록된 사진 1 없음")
                         with col_pic2:
                             if p2_path:
                                 database.download_photo_from_github(p2_path)
                             if p2_path and os.path.exists(p2_path):
-                                # 썸네일 크기로 보여주고 터치시 확대 지원 (use_container_width 대신 width 사용 및 form 내 에러 버튼 제거)
-                                st.image(p2_path, caption="설비사진 2 (터치시 확대)", width=120)
+                                st.image(p2_path, caption="설비사진 2 (터치시 확대)", use_container_width=True)
                             else:
                                 st.caption("등록된 사진 2 없음")
                                 
@@ -1273,13 +1272,14 @@ else:
                     # 사진 노출 크기를 썸네일 크기로 대폭 줄이고 가로로 나란히 배치 (클릭 시 확대 가능)
                     if (p1_path and os.path.exists(p1_path)) or (p2_path and os.path.exists(p2_path)):
                         st.write("**설비 사진 (터치하면 확대됩니다):**")
-                        col_pic1, col_pic2 = st.columns(2)
+                        # 썸네일 크기로 보여주고 터치시 확대 지원하기 위해 컬럼 비율 조절 (use_container_width=True가 라이트박스 원본 확대를 지원함)
+                        col_pic1, col_pic2, col_pic_space = st.columns([1.2, 1.2, 2.6])
                         with col_pic1:
                             if p1_path and os.path.exists(p1_path):
-                                st.image(p1_path, caption="설비사진 1", width=120)
+                                st.image(p1_path, caption="설비사진 1", use_container_width=True)
                         with col_pic2:
                             if p2_path and os.path.exists(p2_path):
-                                st.image(p2_path, caption="설비사진 2", width=120)
+                                st.image(p2_path, caption="설비사진 2", use_container_width=True)
                 
                 # 점검/수리 등록 폼
                 form_title = "➕ 점검 기록 등록"
